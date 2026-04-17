@@ -52,6 +52,11 @@ jobs:
           path: ~/.cache/go-build
           key: go-build-${{ runner.os }}-${{ hashFiles('**/*.go') }}
           restore-keys: go-build-${{ runner.os }}-
+      - uses: actions/cache@v4
+        with:
+          path: ./bin
+          key: bin-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: bin-${{ runner.os }}-
       - run: go mod tidy
       - run: make test
 
@@ -70,6 +75,11 @@ jobs:
           path: ~/.cache/go-build
           key: go-build-${{ runner.os }}-${{ hashFiles('**/*.go') }}
           restore-keys: go-build-${{ runner.os }}-
+      - uses: actions/cache@v4
+        with:
+          path: ./bin
+          key: bin-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: bin-${{ runner.os }}-
       - name: Install kind
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
