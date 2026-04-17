@@ -1,0 +1,47 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - keyline.keyline.dev
+  resources:
+  - keylineapplications
+  - keylineprojects
+  - keylineroleassignments
+  - keylineroles
+  - keylineusers
+  - keylinevirtualservers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - keyline.keyline.dev
+  resources:
+  - keylineapplications/finalizers
+  - keylineprojects/finalizers
+  - keylineroleassignments/finalizers
+  - keylineroles/finalizers
+  - keylineusers/finalizers
+  - keylinevirtualservers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - keyline.keyline.dev
+  resources:
+  - keylineapplications/status
+  - keylineprojects/status
+  - keylineroleassignments/status
+  - keylineroles/status
+  - keylineusers/status
+  - keylinevirtualservers/status
+  verbs:
+  - get
+  - patch
+  - update

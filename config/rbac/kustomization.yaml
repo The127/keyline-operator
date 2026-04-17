@@ -1,0 +1,40 @@
+resources:
+# All RBAC will be applied under this service account in
+# the deployment namespace. You may comment out this resource
+# if your manager will use a service account that exists at
+# runtime. Be sure to update RoleBinding and ClusterRoleBinding
+# subjects if changing service account names and namespaces.
+- service_account.yaml
+- role.yaml
+- role_binding.yaml
+- leader_election_role.yaml
+- leader_election_role_binding.yaml
+# Best practices require that applications authenticate to the
+# APIServer using a minimal service account. The following
+# generated ClusterRole and ClusterRoleBinding allow the manager
+# to access the metrics endpoint via the authentication proxy.
+- metrics_auth_role.yaml
+- metrics_auth_role_binding.yaml
+- metrics_reader_role.yaml
+# Add the following RBAC definitions for CRD-specific roles
+- keylineapplication_admin_role.yaml
+- keylineapplication_editor_role.yaml
+- keylineapplication_viewer_role.yaml
+- keylineinstance_admin_role.yaml
+- keylineinstance_editor_role.yaml
+- keylineinstance_viewer_role.yaml
+- keylineproject_admin_role.yaml
+- keylineproject_editor_role.yaml
+- keylineproject_viewer_role.yaml
+- keylinerole_admin_role.yaml
+- keylinerole_editor_role.yaml
+- keylinerole_viewer_role.yaml
+- keylineroleassignment_admin_role.yaml
+- keylineroleassignment_editor_role.yaml
+- keylineroleassignment_viewer_role.yaml
+- keylineuser_admin_role.yaml
+- keylineuser_editor_role.yaml
+- keylineuser_viewer_role.yaml
+- keylinevirtualserver_admin_role.yaml
+- keylinevirtualserver_editor_role.yaml
+- keylinevirtualserver_viewer_role.yaml
