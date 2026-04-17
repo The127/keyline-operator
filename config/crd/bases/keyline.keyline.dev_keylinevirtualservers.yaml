@@ -40,10 +40,47 @@ spec:
           spec:
             description: spec defines the desired state of KeylineVirtualServer
             properties:
-              foo:
-                description: foo is an example field of KeylineVirtualServer. Edit
-                  keylinevirtualserver_types.go to remove/update
+              displayName:
+                description: DisplayName is the human-readable label shown in the
+                  Keyline UI.
                 type: string
+              instanceRef:
+                description: InstanceRef references the KeylineInstance that provides
+                  API credentials.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              name:
+                description: Name is the name of the virtual server in Keyline (alphanumeric
+                  only).
+                maxLength: 255
+                minLength: 1
+                pattern: ^[a-zA-Z0-9]+$
+                type: string
+              registrationEnabled:
+                description: RegistrationEnabled controls whether user self-registration
+                  is allowed.
+                type: boolean
+              require2fa:
+                description: Require2FA controls whether two-factor authentication
+                  is required.
+                type: boolean
+              requireEmailVerification:
+                description: RequireEmailVerification controls whether email verification
+                  is required.
+                type: boolean
+            required:
+            - instanceRef
+            - name
             type: object
           status:
             description: status defines the observed state of KeylineVirtualServer

@@ -12,7 +12,6 @@ rules:
   - keylineroleassignments
   - keylineroles
   - keylineusers
-  - keylinevirtualservers
   verbs:
   - create
   - delete
@@ -29,7 +28,6 @@ rules:
   - keylineroleassignments/finalizers
   - keylineroles/finalizers
   - keylineusers/finalizers
-  - keylinevirtualservers/finalizers
   verbs:
   - update
 - apiGroups:
@@ -40,7 +38,6 @@ rules:
   - keylineroleassignments/status
   - keylineroles/status
   - keylineusers/status
-  - keylinevirtualservers/status
   verbs:
   - get
   - patch

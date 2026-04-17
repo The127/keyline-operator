@@ -17,22 +17,38 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// KeylineVirtualServerSpec defines the desired state of KeylineVirtualServer
+// KeylineVirtualServerSpec defines the desired state of KeylineVirtualServer.
 type KeylineVirtualServerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// InstanceRef references the KeylineInstance that provides API credentials.
+	// +kubebuilder:validation:Required
+	InstanceRef corev1.LocalObjectReference `json:"instanceRef"`
 
-	// foo is an example field of KeylineVirtualServer. Edit keylinevirtualserver_types.go to remove/update
+	// Name is the name of the virtual server in Keyline (alphanumeric only).
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9]+$`
+	Name string `json:"name"`
+
+	// DisplayName is the human-readable label shown in the Keyline UI.
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	DisplayName *string `json:"displayName,omitempty"`
+
+	// RegistrationEnabled controls whether user self-registration is allowed.
+	// +optional
+	RegistrationEnabled *bool `json:"registrationEnabled,omitempty"`
+
+	// Require2FA controls whether two-factor authentication is required.
+	// +optional
+	Require2FA *bool `json:"require2fa,omitempty"`
+
+	// RequireEmailVerification controls whether email verification is required.
+	// +optional
+	RequireEmailVerification *bool `json:"requireEmailVerification,omitempty"`
 }
 
 // KeylineVirtualServerStatus defines the observed state of KeylineVirtualServer.
