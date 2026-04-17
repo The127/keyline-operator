@@ -1,0 +1,10 @@
+## Append samples of your project ##
+resources:
+- keyline_v1alpha1_keylineinstance.yaml
+- keyline_v1alpha1_keylinevirtualserver.yaml
+- keyline_v1alpha1_keylineproject.yaml
+- keyline_v1alpha1_keylineapplication.yaml
+- keyline_v1alpha1_keylinerole.yaml
+- keyline_v1alpha1_keylineuser.yaml
+- keyline_v1alpha1_keylineroleassignment.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

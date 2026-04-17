@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Enforce Conventional Commits: https://www.conventionalcommits.org
+set -euo pipefail
+
+msg=$(cat "$1")
+pattern='^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\([a-zA-Z0-9/_-]+\))?(!)?: .{1,100}'
+
+if ! echo "$msg" | grep -qE "$pattern"; then
+  echo "Invalid commit message. Expected format:"
+  echo "  <type>(<scope>): <subject>"
+  echo ""
+  echo "Types: feat fix docs style refactor perf test chore ci build revert"
+  echo "Example: feat(controller): add bootstrap reconciler"
+  exit 1
+fi

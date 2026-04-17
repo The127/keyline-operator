@@ -1,0 +1,9 @@
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineRoleAssignment
+metadata:
+  labels:
+    app.kubernetes.io/name: keyline-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: keylineroleassignment-sample
+spec:
+  # TODO(user): Add fields here

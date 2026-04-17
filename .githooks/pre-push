@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "→ go test (unit)"
+go test $(go list ./... | grep -v /e2e) -count=1
