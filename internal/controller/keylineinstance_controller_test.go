@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	keylinev1alpha1 "github.com/keyline/keyline-operator/api/v1alpha1"
@@ -51,7 +52,12 @@ var _ = Describe("KeylineInstance Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: keylinev1alpha1.KeylineInstanceSpec{
+						URL:                 "https://keyline.example.com",
+						VirtualServer:       "default",
+						ConfigMapRef:        corev1.LocalObjectReference{Name: "keyline-config"},
+						PrivateKeySecretRef: corev1.LocalObjectReference{Name: "keyline-credentials"},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
