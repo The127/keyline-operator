@@ -1,3 +1,4 @@
+// Package controller implements the Keyline operator controllers.
 package controller
 
 import (
@@ -31,6 +32,7 @@ type KeylineInstanceReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// Reconcile reconciles a KeylineInstance object against the actual cluster state.
 func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -88,6 +90,7 @@ func (r *KeylineInstanceReconciler) setNotReady(ctx context.Context, instance *k
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
+// SetupWithManager sets up the controller with the Manager.
 func (r *KeylineInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&keylinev1alpha1.KeylineInstance{}).

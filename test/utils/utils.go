@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package utils provides helper utilities for e2e tests.
 package utils
 
 import (
@@ -24,7 +25,7 @@ import (
 	"os/exec"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
+	. "github.com/onsi/ginkgo/v2" //nolint:revive
 )
 
 const (
@@ -181,8 +182,7 @@ func LoadImageToKindClusterWithName(name string) error {
 // according to line breakers, and ignores the empty elements in it.
 func GetNonEmptyLines(output string) []string {
 	var res []string
-	elements := strings.Split(output, "\n")
-	for _, element := range elements {
+	for element := range strings.SplitSeq(output, "\n") {
 		if element != "" {
 			res = append(res, element)
 		}
@@ -197,7 +197,7 @@ func GetProjectDir() (string, error) {
 	if err != nil {
 		return wd, err
 	}
-	wd = strings.Replace(wd, "/test/e2e", "", -1)
+	wd = strings.ReplaceAll(wd, "/test/e2e", "")
 	return wd, nil
 }
 

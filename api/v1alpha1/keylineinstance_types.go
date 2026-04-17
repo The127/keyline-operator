@@ -63,7 +63,6 @@ type KeylineInstanceStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
 }
 
 // ConditionReady is True when the operator can successfully exchange a token
