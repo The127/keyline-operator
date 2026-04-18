@@ -2,7 +2,9 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 
 	keylineclient "github.com/The127/Keyline/client"
 	corev1 "k8s.io/api/core/v1"
@@ -69,6 +71,12 @@ func setReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient.Ob
 		return ReconcileErrorf("updating status: %w", err)
 	}
 	return ReconcileAfter(requeueAfter)
+}
+
+// isApiNotFound reports whether err is a Keyline API 404 response.
+func isApiNotFound(err error) bool {
+	var apiErr keylineclient.ApiError
+	return errors.As(err, &apiErr) && apiErr.Code == http.StatusNotFound
 }
 
 // resolveSecret reads one or more keys from a Secret and returns their string values in order.

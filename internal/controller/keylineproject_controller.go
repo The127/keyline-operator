@@ -18,11 +18,8 @@ package controller
 
 import (
 	"context"
-	"errors"
-	"net/http"
 
 	keylineapi "github.com/The127/Keyline/api"
-	keylineclient "github.com/The127/Keyline/client"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -84,23 +81,21 @@ func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	_, err = kc.Project().Get(ctx, proj.Spec.Slug)
 	if err != nil {
-		var apiErr keylineclient.ApiError
-		if errors.As(err, &apiErr) && apiErr.Code == http.StatusNotFound {
-			description := ""
-			if proj.Spec.Description != nil {
-				description = *proj.Spec.Description
-			}
-			if _, createErr := kc.Project().Create(ctx, keylineapi.CreateProjectRequestDto{
-				Slug:        proj.Spec.Slug,
-				Name:        proj.Spec.Name,
-				Description: description,
-			}); createErr != nil {
-				log.Error(createErr, "failed to create project")
-				return r.setNotReady(ctx, &proj, "CreateFailed", createErr.Error())
-			}
-		} else {
+		if !isApiNotFound(err) {
 			log.Error(err, "failed to get project")
 			return r.setNotReady(ctx, &proj, "GetFailed", err.Error())
+		}
+		description := ""
+		if proj.Spec.Description != nil {
+			description = *proj.Spec.Description
+		}
+		if _, createErr := kc.Project().Create(ctx, keylineapi.CreateProjectRequestDto{
+			Slug:        proj.Spec.Slug,
+			Name:        proj.Spec.Name,
+			Description: description,
+		}); createErr != nil {
+			log.Error(createErr, "failed to create project")
+			return r.setNotReady(ctx, &proj, "CreateFailed", createErr.Error())
 		}
 	}
 
