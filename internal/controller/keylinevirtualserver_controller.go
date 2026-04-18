@@ -4,7 +4,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -36,7 +35,7 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 
 	var vs keylinev1alpha1.KeylineVirtualServer
 	if err := r.Get(ctx, req.NamespacedName, &vs); err != nil {
-		return ctrl.Result{}, k8sclient.IgnoreNotFound(err)
+		return ReconcileError(k8sclient.IgnoreNotFound(err))
 	}
 
 	var instance keylinev1alpha1.KeylineInstance
@@ -110,10 +109,10 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 		LastTransitionTime: metav1.Now(),
 	})
 	if err := r.Status().Update(ctx, &vs); err != nil {
-		return ctrl.Result{}, fmt.Errorf("updating status: %w", err)
+		return ReconcileErrorf("updating status: %w", err)
 	}
 
-	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	return ReconcileAfter(requeueAfter)
 }
 
 func (r *KeylineVirtualServerReconciler) setNotReady(ctx context.Context, vs *keylinev1alpha1.KeylineVirtualServer, reason, msg string) (ctrl.Result, error) {
@@ -125,9 +124,9 @@ func (r *KeylineVirtualServerReconciler) setNotReady(ctx context.Context, vs *ke
 		LastTransitionTime: metav1.Now(),
 	})
 	if err := r.Status().Update(ctx, vs); err != nil {
-		return ctrl.Result{}, fmt.Errorf("updating status: %w", err)
+		return ReconcileErrorf("updating status: %w", err)
 	}
-	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	return ReconcileAfter(requeueAfter)
 }
 
 // SetupWithManager sets up the controller with the Manager.

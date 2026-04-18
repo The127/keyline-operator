@@ -51,7 +51,7 @@ func (r *KeylineRoleAssignmentReconciler) Reconcile(ctx context.Context, _ ctrl.
 
 	// TODO(user): your logic here
 
-	return ctrl.Result{}, nil
+	return ReconcileSuccess()
 }
 
 // SetupWithManager sets up the controller with the Manager.

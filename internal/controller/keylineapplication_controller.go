@@ -52,7 +52,7 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, _ ctrl.Req
 
 	// TODO(user): your logic here
 
-	return ctrl.Result{}, nil
+	return ReconcileSuccess()
 }
 
 // SetupWithManager sets up the controller with the Manager.
