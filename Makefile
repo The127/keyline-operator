@@ -72,10 +72,8 @@ test-e2e: manifests generate fmt vet ## Run the e2e tests against a local miniku
 		echo "minikube is not installed. Please install minikube manually."; \
 		exit 1; \
 	}
-	@minikube status --format='{{.Host}}' 2>/dev/null | grep -q 'Running' || { \
-		echo "minikube is not running. Start it with: minikube start"; \
-		exit 1; \
-	}
+	minikube delete --all
+	minikube start
 	go test ./test/e2e/ -v -ginkgo.v
 
 .PHONY: lint

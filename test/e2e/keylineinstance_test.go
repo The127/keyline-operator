@@ -29,6 +29,15 @@ var _ = Describe("KeylineInstance", Ordered, func() {
 		_, err = utils.Run(cmd) //nolint:ineffassign
 		Expect(err).NotTo(HaveOccurred(), "Failed to deploy operator")
 
+		By("waiting for the operator to be ready")
+		cmd = exec.Command("kubectl", "wait", "deployment/keyline-operator-controller-manager",
+			"-n", "keyline-operator-system",
+			"--for=condition=Available",
+			"--timeout=2m",
+		)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Operator did not become ready in time")
+
 		By("creating the e2e test namespace")
 		cmd = exec.Command("kubectl", "create", "ns", testNamespace)
 		_, _ = utils.Run(cmd)
@@ -57,7 +66,7 @@ metadata:
   name: %s
   namespace: %s
 spec:
-  image: ghcr.io/the127/keyline:v0.3.2
+  image: ghcr.io/the127/keyline:v0.3.3
   externalUrl: http://keyline.test
   frontendExternalUrl: http://frontend.test
   virtualServer: keyline
@@ -73,19 +82,20 @@ spec:
 		Expect(err).NotTo(HaveOccurred(), "Failed to create KeylineInstance")
 
 		By("waiting for the Keyline Deployment to become available")
-		cmd = exec.Command("kubectl", "wait",
-			fmt.Sprintf("deployment/%s", instanceName),
-			"-n", testNamespace,
-			"--for=condition=Available",
-			"--timeout=5m",
-		)
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Keyline Deployment did not become available")
-
-		By("waiting for the KeylineInstance Ready condition to be True")
 		SetDefaultEventuallyTimeout(5 * time.Minute)
 		SetDefaultEventuallyPollingInterval(5 * time.Second)
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "wait",
+				fmt.Sprintf("deployment/%s", instanceName),
+				"-n", testNamespace,
+				"--for=condition=Available",
+				"--timeout=10s",
+			)
+			_, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+		}).Should(Succeed(), "Keyline Deployment did not become available")
 
+		By("waiting for the KeylineInstance Ready condition to be True")
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get",
 				fmt.Sprintf("keylineinstance/%s", instanceName),
