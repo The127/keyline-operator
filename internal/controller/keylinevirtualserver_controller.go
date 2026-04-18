@@ -37,29 +37,30 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 	if err := r.Get(ctx, req.NamespacedName, &vs); err != nil {
 		return ReconcileError(k8sclient.IgnoreNotFound(err))
 	}
+	sp := newStatusPatcher(r.Client, &vs, &vs.Status.Conditions)
 
 	var instance keylinev1alpha1.KeylineInstance
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: vs.Namespace,
 		Name:      vs.Spec.InstanceRef.Name,
 	}, &instance); err != nil {
-		return r.setNotReady(ctx, &vs, "InstanceNotFound", err.Error())
+		return sp.setNotReady(ctx, "InstanceNotFound", err.Error())
 	}
 
 	if !meta.IsStatusConditionTrue(instance.Status.Conditions, keylinev1alpha1.ConditionReady) {
 		log.Info("KeylineInstance not ready, requeueing")
-		return r.setNotReady(ctx, &vs, "InstanceNotReady", "KeylineInstance is not ready")
+		return sp.setNotReady(ctx, "InstanceNotReady", "KeylineInstance is not ready")
 	}
 
 	kc, err := newOperatorClient(ctx, r.Client, vs.Namespace, &instance, vs.Spec.Name)
 	if err != nil {
-		return r.setNotReady(ctx, &vs, "SecretNotFound", err.Error())
+		return sp.setNotReady(ctx, "SecretNotFound", err.Error())
 	}
 
 	current, err := kc.VirtualServer().Get(ctx)
 	if err != nil {
 		log.Error(err, "failed to get virtual server")
-		return r.setNotReady(ctx, &vs, "GetFailed", err.Error())
+		return sp.setNotReady(ctx, "GetFailed", err.Error())
 	}
 
 	patch := keylineclient.PatchVirtualServerInput{}
@@ -85,15 +86,11 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 	if needsPatch {
 		if err := kc.VirtualServer().Patch(ctx, patch); err != nil {
 			log.Error(err, "failed to patch virtual server")
-			return r.setNotReady(ctx, &vs, "PatchFailed", err.Error())
+			return sp.setNotReady(ctx, "PatchFailed", err.Error())
 		}
 	}
 
-	return setReadyCondition(ctx, r.Client, &vs, &vs.Status.Conditions, "Synced", "Virtual server is in sync")
-}
-
-func (r *KeylineVirtualServerReconciler) setNotReady(ctx context.Context, vs *keylinev1alpha1.KeylineVirtualServer, reason, msg string) (ctrl.Result, error) {
-	return setNotReadyCondition(ctx, r.Client, vs, &vs.Status.Conditions, reason, msg)
+	return sp.setReady(ctx, "Synced", "Virtual server is in sync")
 }
 
 // SetupWithManager sets up the controller with the Manager.

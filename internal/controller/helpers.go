@@ -43,9 +43,35 @@ func newOperatorClient(ctx context.Context, c k8sclient.Client, namespace string
 	return keylineclient.NewClient(instance.Status.URL, virtualServerName, keylineclient.WithOidc(ts)), nil
 }
 
-// setNotReadyCondition marks obj not-ready and persists the status update.
-func setNotReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient.Object, conditions *[]metav1.Condition, reason, msg string) (ctrl.Result, error) {
-	base := obj.DeepCopyObject().(k8sclient.Object)
+// statusPatcher snapshots an object immediately after r.Get and patches only
+// the status diff on each setReady/setNotReady call. Creating it before any
+// mutations ensures extra status fields (RoleId, UserId, URL, etc.) are
+// included in the merge-patch diff alongside condition changes.
+type statusPatcher struct {
+	client     k8sclient.Client
+	obj        k8sclient.Object
+	base       k8sclient.Object
+	conditions *[]metav1.Condition
+}
+
+func newStatusPatcher(c k8sclient.Client, obj k8sclient.Object, conditions *[]metav1.Condition) *statusPatcher {
+	return &statusPatcher{
+		client:     c,
+		obj:        obj,
+		base:       obj.DeepCopyObject().(k8sclient.Object),
+		conditions: conditions,
+	}
+}
+
+func (p *statusPatcher) setNotReady(ctx context.Context, reason, msg string) (ctrl.Result, error) {
+	return setNotReadyCondition(ctx, p.client, p.obj, p.base, p.conditions, reason, msg)
+}
+
+func (p *statusPatcher) setReady(ctx context.Context, reason, msg string) (ctrl.Result, error) {
+	return setReadyCondition(ctx, p.client, p.obj, p.base, p.conditions, reason, msg)
+}
+
+func setNotReadyCondition(ctx context.Context, c k8sclient.Client, obj, base k8sclient.Object, conditions *[]metav1.Condition, reason, msg string) (ctrl.Result, error) {
 	meta.SetStatusCondition(conditions, metav1.Condition{
 		Type:               keylinev1alpha1.ConditionReady,
 		Status:             metav1.ConditionFalse,
@@ -59,9 +85,7 @@ func setNotReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient
 	return ReconcileAfter(requeueAfter)
 }
 
-// setReadyCondition marks obj ready and persists the status update.
-func setReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient.Object, conditions *[]metav1.Condition, reason, msg string) (ctrl.Result, error) {
-	base := obj.DeepCopyObject().(k8sclient.Object)
+func setReadyCondition(ctx context.Context, c k8sclient.Client, obj, base k8sclient.Object, conditions *[]metav1.Condition, reason, msg string) (ctrl.Result, error) {
 	meta.SetStatusCondition(conditions, metav1.Condition{
 		Type:               keylinev1alpha1.ConditionReady,
 		Status:             metav1.ConditionTrue,

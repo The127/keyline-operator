@@ -41,18 +41,19 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if err := r.Get(ctx, req.NamespacedName, &app); err != nil {
 		return ReconcileError(k8sclient.IgnoreNotFound(err))
 	}
+	sp := newStatusPatcher(r.Client, &app, &app.Status.Conditions)
 
 	var proj keylinev1alpha1.KeylineProject
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: app.Namespace,
 		Name:      app.Spec.ProjectRef.Name,
 	}, &proj); err != nil {
-		return r.setNotReady(ctx, &app, "ProjectNotFound", err.Error())
+		return sp.setNotReady(ctx, "ProjectNotFound", err.Error())
 	}
 
 	if !meta.IsStatusConditionTrue(proj.Status.Conditions, keylinev1alpha1.ConditionReady) {
 		log.Info("KeylineProject not ready, requeueing")
-		return r.setNotReady(ctx, &app, "ProjectNotReady", "KeylineProject is not ready")
+		return sp.setNotReady(ctx, "ProjectNotReady", "KeylineProject is not ready")
 	}
 
 	var vs keylinev1alpha1.KeylineVirtualServer
@@ -60,12 +61,12 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 		Namespace: app.Namespace,
 		Name:      proj.Spec.VirtualServerRef.Name,
 	}, &vs); err != nil {
-		return r.setNotReady(ctx, &app, "VirtualServerNotFound", err.Error())
+		return sp.setNotReady(ctx, "VirtualServerNotFound", err.Error())
 	}
 
 	if !meta.IsStatusConditionTrue(vs.Status.Conditions, keylinev1alpha1.ConditionReady) {
 		log.Info("KeylineVirtualServer not ready, requeueing")
-		return r.setNotReady(ctx, &app, "VirtualServerNotReady", "KeylineVirtualServer is not ready")
+		return sp.setNotReady(ctx, "VirtualServerNotReady", "KeylineVirtualServer is not ready")
 	}
 
 	var instance keylinev1alpha1.KeylineInstance
@@ -73,12 +74,12 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 		Namespace: app.Namespace,
 		Name:      vs.Spec.InstanceRef.Name,
 	}, &instance); err != nil {
-		return r.setNotReady(ctx, &app, "InstanceNotFound", err.Error())
+		return sp.setNotReady(ctx, "InstanceNotFound", err.Error())
 	}
 
 	kc, err := newOperatorClient(ctx, r.Client, app.Namespace, &instance, vs.Spec.Name)
 	if err != nil {
-		return r.setNotReady(ctx, &app, "SecretNotFound", err.Error())
+		return sp.setNotReady(ctx, "SecretNotFound", err.Error())
 	}
 
 	ac := kc.Project().Application(proj.Spec.Slug)
@@ -89,7 +90,7 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 			existing, getErr := ac.Get(ctx, id)
 			if getErr != nil && !isApiNotFound(getErr) {
 				log.Error(getErr, "failed to get application")
-				return r.setNotReady(ctx, &app, "GetFailed", getErr.Error())
+				return sp.setNotReady(ctx, "GetFailed", getErr.Error())
 			}
 			if getErr == nil {
 				patch := keylineapi.PatchApplicationRequestDto{}
@@ -109,10 +110,10 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 				if needsPatch {
 					if patchErr := ac.Patch(ctx, id, patch); patchErr != nil {
 						log.Error(patchErr, "failed to patch application")
-						return r.setNotReady(ctx, &app, "PatchFailed", patchErr.Error())
+						return sp.setNotReady(ctx, "PatchFailed", patchErr.Error())
 					}
 				}
-				return setReadyCondition(ctx, r.Client, &app, &app.Status.Conditions, "Synced", "Application synced")
+				return sp.setReady(ctx, "Synced", "Application synced")
 			}
 			// 404 — fall through to find or create
 			app.Status.ApplicationId = ""
@@ -123,7 +124,7 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 	page, err := ac.List(ctx, keylineclient.ListApplicationParams{Page: 0, Size: 1000})
 	if err != nil {
 		log.Error(err, "failed to list applications")
-		return r.setNotReady(ctx, &app, "ListFailed", err.Error())
+		return sp.setNotReady(ctx, "ListFailed", err.Error())
 	}
 	for _, item := range page.Items {
 		if item.Name == app.Spec.Name {
@@ -144,16 +145,12 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 		})
 		if createErr != nil {
 			log.Error(createErr, "failed to create application")
-			return r.setNotReady(ctx, &app, "CreateFailed", createErr.Error())
+			return sp.setNotReady(ctx, "CreateFailed", createErr.Error())
 		}
 		app.Status.ApplicationId = resp.Id.String()
 	}
 
-	return setReadyCondition(ctx, r.Client, &app, &app.Status.Conditions, "Synced", "Application synced")
-}
-
-func (r *KeylineApplicationReconciler) setNotReady(ctx context.Context, app *keylinev1alpha1.KeylineApplication, reason, msg string) (ctrl.Result, error) {
-	return setNotReadyCondition(ctx, r.Client, app, &app.Status.Conditions, reason, msg)
+	return sp.setReady(ctx, "Synced", "Application synced")
 }
 
 // SetupWithManager sets up the controller with the Manager.

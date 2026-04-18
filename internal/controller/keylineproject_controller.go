@@ -52,18 +52,19 @@ func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.Get(ctx, req.NamespacedName, &proj); err != nil {
 		return ReconcileError(k8sclient.IgnoreNotFound(err))
 	}
+	sp := newStatusPatcher(r.Client, &proj, &proj.Status.Conditions)
 
 	var vs keylinev1alpha1.KeylineVirtualServer
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: proj.Namespace,
 		Name:      proj.Spec.VirtualServerRef.Name,
 	}, &vs); err != nil {
-		return r.setNotReady(ctx, &proj, "VirtualServerNotFound", err.Error())
+		return sp.setNotReady(ctx, "VirtualServerNotFound", err.Error())
 	}
 
 	if !meta.IsStatusConditionTrue(vs.Status.Conditions, keylinev1alpha1.ConditionReady) {
 		log.Info("KeylineVirtualServer not ready, requeueing")
-		return r.setNotReady(ctx, &proj, "VirtualServerNotReady", "KeylineVirtualServer is not ready")
+		return sp.setNotReady(ctx, "VirtualServerNotReady", "KeylineVirtualServer is not ready")
 	}
 
 	var instance keylinev1alpha1.KeylineInstance
@@ -71,19 +72,19 @@ func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Namespace: proj.Namespace,
 		Name:      vs.Spec.InstanceRef.Name,
 	}, &instance); err != nil {
-		return r.setNotReady(ctx, &proj, "InstanceNotFound", err.Error())
+		return sp.setNotReady(ctx, "InstanceNotFound", err.Error())
 	}
 
 	kc, err := newOperatorClient(ctx, r.Client, proj.Namespace, &instance, vs.Spec.Name)
 	if err != nil {
-		return r.setNotReady(ctx, &proj, "SecretNotFound", err.Error())
+		return sp.setNotReady(ctx, "SecretNotFound", err.Error())
 	}
 
 	_, err = kc.Project().Get(ctx, proj.Spec.Slug)
 	if err != nil {
 		if !isApiNotFound(err) {
 			log.Error(err, "failed to get project")
-			return r.setNotReady(ctx, &proj, "GetFailed", err.Error())
+			return sp.setNotReady(ctx, "GetFailed", err.Error())
 		}
 		description := ""
 		if proj.Spec.Description != nil {
@@ -95,15 +96,11 @@ func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			Description: description,
 		}); createErr != nil {
 			log.Error(createErr, "failed to create project")
-			return r.setNotReady(ctx, &proj, "CreateFailed", createErr.Error())
+			return sp.setNotReady(ctx, "CreateFailed", createErr.Error())
 		}
 	}
 
-	return setReadyCondition(ctx, r.Client, &proj, &proj.Status.Conditions, "Synced", "Project exists in Keyline")
-}
-
-func (r *KeylineProjectReconciler) setNotReady(ctx context.Context, proj *keylinev1alpha1.KeylineProject, reason, msg string) (ctrl.Result, error) {
-	return setNotReadyCondition(ctx, r.Client, proj, &proj.Status.Conditions, reason, msg)
+	return sp.setReady(ctx, "Synced", "Project exists in Keyline")
 }
 
 // SetupWithManager sets up the controller with the Manager.

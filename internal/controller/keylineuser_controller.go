@@ -40,18 +40,19 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.Get(ctx, req.NamespacedName, &user); err != nil {
 		return ReconcileError(k8sclient.IgnoreNotFound(err))
 	}
+	sp := newStatusPatcher(r.Client, &user, &user.Status.Conditions)
 
 	var vs keylinev1alpha1.KeylineVirtualServer
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: user.Namespace,
 		Name:      user.Spec.VirtualServerRef.Name,
 	}, &vs); err != nil {
-		return r.setNotReady(ctx, &user, "VirtualServerNotFound", err.Error())
+		return sp.setNotReady(ctx, "VirtualServerNotFound", err.Error())
 	}
 
 	if !meta.IsStatusConditionTrue(vs.Status.Conditions, keylinev1alpha1.ConditionReady) {
 		log.Info("KeylineVirtualServer not ready, requeueing")
-		return r.setNotReady(ctx, &user, "VirtualServerNotReady", "KeylineVirtualServer is not ready")
+		return sp.setNotReady(ctx, "VirtualServerNotReady", "KeylineVirtualServer is not ready")
 	}
 
 	var instance keylinev1alpha1.KeylineInstance
@@ -59,12 +60,12 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		Namespace: user.Namespace,
 		Name:      vs.Spec.InstanceRef.Name,
 	}, &instance); err != nil {
-		return r.setNotReady(ctx, &user, "InstanceNotFound", err.Error())
+		return sp.setNotReady(ctx, "InstanceNotFound", err.Error())
 	}
 
 	kc, err := newOperatorClient(ctx, r.Client, user.Namespace, &instance, vs.Spec.Name)
 	if err != nil {
-		return r.setNotReady(ctx, &user, "SecretNotFound", err.Error())
+		return sp.setNotReady(ctx, "SecretNotFound", err.Error())
 	}
 
 	uc := kc.User()
@@ -75,14 +76,14 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			existing, getErr := uc.Get(ctx, id)
 			if getErr != nil && !isApiNotFound(getErr) {
 				log.Error(getErr, "failed to get user")
-				return r.setNotReady(ctx, &user, "GetFailed", getErr.Error())
+				return sp.setNotReady(ctx, "GetFailed", getErr.Error())
 			}
 			if getErr == nil {
 				if err := r.syncDisplayName(ctx, uc, id, user.Spec.DisplayName, existing.DisplayName); err != nil {
 					log.Error(err, "failed to patch user")
-					return r.setNotReady(ctx, &user, "PatchFailed", err.Error())
+					return sp.setNotReady(ctx, "PatchFailed", err.Error())
 				}
-				return setReadyCondition(ctx, r.Client, &user, &user.Status.Conditions, "Synced", "User synced")
+				return sp.setReady(ctx, "Synced", "User synced")
 			}
 			// 404 — fall through to find or create
 			user.Status.UserId = ""
@@ -93,7 +94,7 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	page, err := uc.List(ctx, keylineclient.ListUserParams{Page: 0, Size: 1000})
 	if err != nil {
 		log.Error(err, "failed to list users")
-		return r.setNotReady(ctx, &user, "ListFailed", err.Error())
+		return sp.setNotReady(ctx, "ListFailed", err.Error())
 	}
 	for _, item := range page.Items {
 		if item.Username == user.Spec.Username && item.IsServiceUser {
@@ -106,7 +107,7 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		id, createErr := uc.CreateServiceUser(ctx, user.Spec.Username)
 		if createErr != nil {
 			log.Error(createErr, "failed to create service user")
-			return r.setNotReady(ctx, &user, "CreateFailed", createErr.Error())
+			return sp.setNotReady(ctx, "CreateFailed", createErr.Error())
 		}
 		user.Status.UserId = id.String()
 	}
@@ -117,11 +118,11 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			DisplayName: user.Spec.DisplayName,
 		}); patchErr != nil {
 			log.Error(patchErr, "failed to patch user display name")
-			return r.setNotReady(ctx, &user, "PatchFailed", patchErr.Error())
+			return sp.setNotReady(ctx, "PatchFailed", patchErr.Error())
 		}
 	}
 
-	return setReadyCondition(ctx, r.Client, &user, &user.Status.Conditions, "Synced", "User synced")
+	return sp.setReady(ctx, "Synced", "User synced")
 }
 
 func (r *KeylineUserReconciler) syncDisplayName(ctx context.Context, uc keylineclient.UserClient, id uuid.UUID, desired *string, current string) error {
@@ -133,10 +134,6 @@ func (r *KeylineUserReconciler) syncDisplayName(ctx context.Context, uc keylinec
 		return nil
 	}
 	return uc.Patch(ctx, id, keylineapi.PatchUserRequestDto{DisplayName: &wantDisplay})
-}
-
-func (r *KeylineUserReconciler) setNotReady(ctx context.Context, user *keylinev1alpha1.KeylineUser, reason, msg string) (ctrl.Result, error) {
-	return setNotReadyCondition(ctx, r.Client, user, &user.Status.Conditions, reason, msg)
 }
 
 // SetupWithManager sets up the controller with the Manager.

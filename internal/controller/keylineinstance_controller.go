@@ -58,20 +58,21 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err := r.Get(ctx, req.NamespacedName, &instance); err != nil {
 		return ReconcileError(k8sclient.IgnoreNotFound(err))
 	}
+	sp := newStatusPatcher(r.Client, &instance, &instance.Status.Conditions)
 
 	privKeyPEM, pubKeyPEM, kid, err := r.ensureCredentials(ctx, &instance)
 	if err != nil {
-		return r.setNotReady(ctx, &instance, "CredentialsError", err.Error())
+		return sp.setNotReady(ctx, "CredentialsError", err.Error())
 	}
 
 	var dbUser, dbPass string
 	if instance.Spec.Database.Mode == "postgres" {
 		if instance.Spec.Database.Postgres == nil {
-			return r.setNotReady(ctx, &instance, "InvalidSpec", "database.postgres is required when mode is postgres")
+			return sp.setNotReady(ctx, "InvalidSpec", "database.postgres is required when mode is postgres")
 		}
 		dbCreds, err := resolveSecret(ctx, r.Client, instance.Namespace, instance.Spec.Database.Postgres.CredentialsSecretRef.Name, "username", "password")
 		if err != nil {
-			return r.setNotReady(ctx, &instance, "DBCredentialsError", err.Error())
+			return sp.setNotReady(ctx, "DBCredentialsError", err.Error())
 		}
 		dbUser, dbPass = dbCreds[0], dbCreds[1]
 	}
@@ -79,49 +80,47 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	var vaultToken string
 	if instance.Spec.KeyStore.Mode == "vault" {
 		if instance.Spec.KeyStore.Vault == nil {
-			return r.setNotReady(ctx, &instance, "InvalidSpec", "keyStore.vault is required when mode is vault")
+			return sp.setNotReady(ctx, "InvalidSpec", "keyStore.vault is required when mode is vault")
 		}
 		vaultCreds, err := resolveSecret(ctx, r.Client, instance.Namespace, instance.Spec.KeyStore.Vault.TokenSecretRef.Name, "token")
 		if err != nil {
-			return r.setNotReady(ctx, &instance, "VaultTokenError", err.Error())
+			return sp.setNotReady(ctx, "VaultTokenError", err.Error())
 		}
 		vaultToken = vaultCreds[0]
 	}
 
 	configData, configHash, err := buildKeylineConfig(&instance, pubKeyPEM, kid, dbUser, dbPass, vaultToken)
 	if err != nil {
-		return r.setNotReady(ctx, &instance, "ConfigBuildError", err.Error())
+		return sp.setNotReady(ctx, "ConfigBuildError", err.Error())
 	}
 
 	if err := r.ensureConfigSecret(ctx, &instance, configData); err != nil {
-		return r.setNotReady(ctx, &instance, "ConfigSecretError", err.Error())
+		return sp.setNotReady(ctx, "ConfigSecretError", err.Error())
 	}
 
 	if instance.Spec.KeyStore.Mode == keyStoreModeDirectory {
 		if err := r.ensurePVC(ctx, &instance); err != nil {
-			return r.setNotReady(ctx, &instance, "PVCError", err.Error())
+			return sp.setNotReady(ctx, "PVCError", err.Error())
 		}
 	}
 
 	if err := r.ensureService(ctx, &instance); err != nil {
-		return r.setNotReady(ctx, &instance, "ServiceError", err.Error())
+		return sp.setNotReady(ctx, "ServiceError", err.Error())
 	}
 
 	if err := r.ensureDeployment(ctx, &instance, configHash); err != nil {
-		return r.setNotReady(ctx, &instance, "DeploymentError", err.Error())
+		return sp.setNotReady(ctx, "DeploymentError", err.Error())
 	}
 
 	svcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", instance.Name, instance.Namespace, keylinePort)
-	if instance.Status.URL != svcURL {
-		instance.Status.URL = svcURL
-	}
+	instance.Status.URL = svcURL
 
 	available, err := r.isDeploymentAvailable(ctx, &instance)
 	if err != nil {
-		return r.setNotReady(ctx, &instance, "DeploymentError", err.Error())
+		return sp.setNotReady(ctx, "DeploymentError", err.Error())
 	}
 	if !available {
-		return r.setNotReady(ctx, &instance, "DeploymentNotAvailable", "waiting for Deployment to become available")
+		return sp.setNotReady(ctx, "DeploymentNotAvailable", "waiting for Deployment to become available")
 	}
 
 	vs := instance.Spec.VirtualServer
@@ -138,10 +137,10 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	if _, err := ts.Token(); err != nil {
 		log.Error(err, "token exchange failed")
-		return r.setNotReady(ctx, &instance, "TokenExchangeFailed", err.Error())
+		return sp.setNotReady(ctx, "TokenExchangeFailed", err.Error())
 	}
 
-	return r.setReady(ctx, &instance, svcURL)
+	return sp.setReady(ctx, "Ready", "Keyline is deployed and token exchange succeeded")
 }
 
 // ensureCredentials creates the Ed25519 keypair Secret on first run; reads it on subsequent runs.
@@ -360,15 +359,6 @@ func (r *KeylineInstanceReconciler) isDeploymentAvailable(ctx context.Context, i
 		}
 	}
 	return false, nil
-}
-
-func (r *KeylineInstanceReconciler) setNotReady(ctx context.Context, instance *keylinev1alpha1.KeylineInstance, reason, msg string) (ctrl.Result, error) {
-	return setNotReadyCondition(ctx, r.Client, instance, &instance.Status.Conditions, reason, msg)
-}
-
-func (r *KeylineInstanceReconciler) setReady(ctx context.Context, instance *keylinev1alpha1.KeylineInstance, svcURL string) (ctrl.Result, error) {
-	instance.Status.URL = svcURL
-	return setReadyCondition(ctx, r.Client, instance, &instance.Status.Conditions, "Ready", "Keyline is deployed and token exchange succeeded")
 }
 
 func instanceLabels(instance *keylinev1alpha1.KeylineInstance) map[string]string {

@@ -42,18 +42,19 @@ func (r *KeylineRoleAssignmentReconciler) Reconcile(ctx context.Context, req ctr
 	if err := r.Get(ctx, req.NamespacedName, &assignment); err != nil {
 		return ReconcileError(k8sclient.IgnoreNotFound(err))
 	}
+	sp := newStatusPatcher(r.Client, &assignment, &assignment.Status.Conditions)
 
 	var role keylinev1alpha1.KeylineRole
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: assignment.Namespace,
 		Name:      assignment.Spec.RoleRef.Name,
 	}, &role); err != nil {
-		return r.setNotReady(ctx, &assignment, "RoleNotFound", err.Error())
+		return sp.setNotReady(ctx, "RoleNotFound", err.Error())
 	}
 
 	if !meta.IsStatusConditionTrue(role.Status.Conditions, keylinev1alpha1.ConditionReady) {
 		log.Info("KeylineRole not ready, requeueing")
-		return r.setNotReady(ctx, &assignment, "RoleNotReady", "KeylineRole is not ready")
+		return sp.setNotReady(ctx, "RoleNotReady", "KeylineRole is not ready")
 	}
 
 	var user keylinev1alpha1.KeylineUser
@@ -61,12 +62,12 @@ func (r *KeylineRoleAssignmentReconciler) Reconcile(ctx context.Context, req ctr
 		Namespace: assignment.Namespace,
 		Name:      assignment.Spec.UserRef.Name,
 	}, &user); err != nil {
-		return r.setNotReady(ctx, &assignment, "UserNotFound", err.Error())
+		return sp.setNotReady(ctx, "UserNotFound", err.Error())
 	}
 
 	if !meta.IsStatusConditionTrue(user.Status.Conditions, keylinev1alpha1.ConditionReady) {
 		log.Info("KeylineUser not ready, requeueing")
-		return r.setNotReady(ctx, &assignment, "UserNotReady", "KeylineUser is not ready")
+		return sp.setNotReady(ctx, "UserNotReady", "KeylineUser is not ready")
 	}
 
 	var proj keylinev1alpha1.KeylineProject
@@ -74,12 +75,12 @@ func (r *KeylineRoleAssignmentReconciler) Reconcile(ctx context.Context, req ctr
 		Namespace: assignment.Namespace,
 		Name:      role.Spec.ProjectRef.Name,
 	}, &proj); err != nil {
-		return r.setNotReady(ctx, &assignment, "ProjectNotFound", err.Error())
+		return sp.setNotReady(ctx, "ProjectNotFound", err.Error())
 	}
 
 	if !meta.IsStatusConditionTrue(proj.Status.Conditions, keylinev1alpha1.ConditionReady) {
 		log.Info("KeylineProject not ready, requeueing")
-		return r.setNotReady(ctx, &assignment, "ProjectNotReady", "KeylineProject is not ready")
+		return sp.setNotReady(ctx, "ProjectNotReady", "KeylineProject is not ready")
 	}
 
 	var vs keylinev1alpha1.KeylineVirtualServer
@@ -87,12 +88,12 @@ func (r *KeylineRoleAssignmentReconciler) Reconcile(ctx context.Context, req ctr
 		Namespace: assignment.Namespace,
 		Name:      proj.Spec.VirtualServerRef.Name,
 	}, &vs); err != nil {
-		return r.setNotReady(ctx, &assignment, "VirtualServerNotFound", err.Error())
+		return sp.setNotReady(ctx, "VirtualServerNotFound", err.Error())
 	}
 
 	if !meta.IsStatusConditionTrue(vs.Status.Conditions, keylinev1alpha1.ConditionReady) {
 		log.Info("KeylineVirtualServer not ready, requeueing")
-		return r.setNotReady(ctx, &assignment, "VirtualServerNotReady", "KeylineVirtualServer is not ready")
+		return sp.setNotReady(ctx, "VirtualServerNotReady", "KeylineVirtualServer is not ready")
 	}
 
 	var instance keylinev1alpha1.KeylineInstance
@@ -100,22 +101,22 @@ func (r *KeylineRoleAssignmentReconciler) Reconcile(ctx context.Context, req ctr
 		Namespace: assignment.Namespace,
 		Name:      vs.Spec.InstanceRef.Name,
 	}, &instance); err != nil {
-		return r.setNotReady(ctx, &assignment, "InstanceNotFound", err.Error())
+		return sp.setNotReady(ctx, "InstanceNotFound", err.Error())
 	}
 
 	kc, err := newOperatorClient(ctx, r.Client, assignment.Namespace, &instance, vs.Spec.Name)
 	if err != nil {
-		return r.setNotReady(ctx, &assignment, "SecretNotFound", err.Error())
+		return sp.setNotReady(ctx, "SecretNotFound", err.Error())
 	}
 
 	roleId, err := uuid.Parse(role.Status.RoleId)
 	if err != nil {
-		return r.setNotReady(ctx, &assignment, "RoleNotReady", "KeylineRole has no valid RoleId")
+		return sp.setNotReady(ctx, "RoleNotReady", "KeylineRole has no valid RoleId")
 	}
 
 	userId, err := uuid.Parse(user.Status.UserId)
 	if err != nil {
-		return r.setNotReady(ctx, &assignment, "UserNotReady", "KeylineUser has no valid UserId")
+		return sp.setNotReady(ctx, "UserNotReady", "KeylineUser has no valid UserId")
 	}
 
 	rc := kc.Project().Role(proj.Spec.Slug)
@@ -123,7 +124,7 @@ func (r *KeylineRoleAssignmentReconciler) Reconcile(ctx context.Context, req ctr
 	page, err := rc.ListUsers(ctx, roleId, keylineclient.ListUsersInRoleParams{Page: 0, Size: 1000})
 	if err != nil {
 		log.Error(err, "failed to list users in role")
-		return r.setNotReady(ctx, &assignment, "ListFailed", err.Error())
+		return sp.setNotReady(ctx, "ListFailed", err.Error())
 	}
 
 	assigned := false
@@ -137,15 +138,11 @@ func (r *KeylineRoleAssignmentReconciler) Reconcile(ctx context.Context, req ctr
 	if !assigned {
 		if err := rc.Assign(ctx, roleId, userId); err != nil {
 			log.Error(err, "failed to assign role")
-			return r.setNotReady(ctx, &assignment, "AssignFailed", err.Error())
+			return sp.setNotReady(ctx, "AssignFailed", err.Error())
 		}
 	}
 
-	return setReadyCondition(ctx, r.Client, &assignment, &assignment.Status.Conditions, "Synced", "Role assignment synced")
-}
-
-func (r *KeylineRoleAssignmentReconciler) setNotReady(ctx context.Context, assignment *keylinev1alpha1.KeylineRoleAssignment, reason, msg string) (ctrl.Result, error) {
-	return setNotReadyCondition(ctx, r.Client, assignment, &assignment.Status.Conditions, reason, msg)
+	return sp.setReady(ctx, "Synced", "Role assignment synced")
 }
 
 // SetupWithManager sets up the controller with the Manager.
