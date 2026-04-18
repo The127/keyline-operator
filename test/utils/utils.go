@@ -178,6 +178,13 @@ func LoadImageToKindClusterWithName(name string) error {
 	return err
 }
 
+// LoadImageToMinikube loads a local docker image into the minikube cluster.
+func LoadImageToMinikube(name string) error {
+	cmd := exec.Command("minikube", "image", "load", name)
+	_, err := Run(cmd)
+	return err
+}
+
 // GetNonEmptyLines converts given command output string into individual objects
 // according to line breakers, and ignores the empty elements in it.
 func GetNonEmptyLines(output string) []string {

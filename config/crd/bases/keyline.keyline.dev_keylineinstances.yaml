@@ -15,11 +15,11 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.url
-      name: URL
+    - jsonPath: .spec.image
+      name: Image
       type: string
-    - jsonPath: .spec.virtualServer
-      name: VirtualServer
+    - jsonPath: .status.url
+      name: URL
       type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
@@ -31,9 +31,9 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          KeylineInstance is the root resource for a Keyline installation managed by
-          this operator. All other Keyline custom resources reference a KeylineInstance
-          to locate the API and obtain credentials.
+          KeylineInstance is the root resource for a Keyline installation managed by this operator.
+          Declaring a KeylineInstance causes the operator to deploy and configure a Keyline server.
+          All other Keyline custom resources reference a KeylineInstance.
         properties:
           apiVersion:
             description: |-
@@ -55,70 +55,211 @@ spec:
           spec:
             description: KeylineInstanceSpec defines the desired state of KeylineInstance.
             properties:
-              configMapRef:
-                description: |-
-                  ConfigMapRef references the ConfigMap that contains the Keyline config.yaml.
-                  The operator reads the initialVirtualServer section to understand the seeded state.
+              database:
+                description: Database configures the Keyline database connection.
                 properties:
-                  name:
-                    default: ""
-                    description: |-
-                      Name of the referent.
-                      This field is effectively required, but due to backwards compatibility is
-                      allowed to be empty. Instances of this type with an empty value here are
-                      almost certainly wrong.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                    type: string
+                  postgres:
+                    description: Postgres configures a PostgreSQL database.
+                    properties:
+                      credentialsSecretRef:
+                        description: CredentialsSecretRef references a Secret with
+                          keys "username" and "password".
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      database:
+                        default: keyline
+                        description: Database is the PostgreSQL database name. Defaults
+                          to "keyline".
+                        type: string
+                      host:
+                        description: Host is the PostgreSQL server hostname.
+                        minLength: 1
+                        type: string
+                      port:
+                        default: 5432
+                        description: Port is the PostgreSQL server port. Defaults
+                          to 5432.
+                        format: int32
+                        type: integer
+                      sslMode:
+                        default: enable
+                        description: SslMode is the PostgreSQL SSL mode. Defaults
+                          to "enable".
+                        type: string
+                    required:
+                    - credentialsSecretRef
+                    - host
+                    type: object
+                required:
+                - postgres
                 type: object
-                x-kubernetes-map-type: atomic
-              privateKeySecretRef:
-                description: |-
-                  PrivateKeySecretRef references a Secret containing the service-user credentials
-                  the operator uses to authenticate against the Keyline API via JWT token exchange.
-
-                  Required keys:
-                    private-key  — Ed25519 private key in PKCS#8 PEM format
-                    username     — service-user username as registered in Keyline
-                    key-id       — kid of the registered public key
-
-                  The service user must be pre-seeded in Keyline (e.g. via initialVirtualServer.serviceUsers
-                  in the Keyline config) with the corresponding public key registered before the operator starts.
-                properties:
-                  name:
-                    default: ""
-                    description: |-
-                      Name of the referent.
-                      This field is effectively required, but due to backwards compatibility is
-                      allowed to be empty. Instances of this type with an empty value here are
-                      almost certainly wrong.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                    type: string
-                type: object
-                x-kubernetes-map-type: atomic
-              url:
-                description: URL is the base URL of the Keyline server (e.g. https://keyline.example.com).
+              externalUrl:
+                description: ExternalUrl is the public-facing URL of the Keyline server,
+                  used in OIDC redirects.
                 minLength: 1
                 type: string
-              virtualServer:
-                description: VirtualServer is the name of the Keyline virtual server
-                  this instance manages.
+              frontendExternalUrl:
+                description: FrontendExternalUrl is the public-facing URL of the Keyline
+                  frontend application.
                 minLength: 1
+                type: string
+              image:
+                description: Image is the Keyline container image to deploy.
+                minLength: 1
+                type: string
+              keyStore:
+                description: KeyStore configures where Keyline stores cryptographic
+                  keys.
+                properties:
+                  directory:
+                    description: |-
+                      Directory configures a PVC-backed key store.
+                      Required when mode is "directory".
+                    properties:
+                      storageClassName:
+                        description: StorageClassName is the storage class for the
+                          PVC. Uses the cluster default if unset.
+                        type: string
+                      storageSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: StorageSize is the PVC capacity. Defaults to
+                          1Gi.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                    type: object
+                  mode:
+                    description: 'Mode is the key store backend. One of: directory,
+                      vault.'
+                    enum:
+                    - directory
+                    - vault
+                    type: string
+                  vault:
+                    description: |-
+                      Vault configures a HashiCorp Vault/OpenBao key store.
+                      Required when mode is "vault".
+                    properties:
+                      address:
+                        description: Address is the Vault server URL.
+                        minLength: 1
+                        type: string
+                      mount:
+                        description: Mount is the Vault secrets engine mount path.
+                        minLength: 1
+                        type: string
+                      prefix:
+                        description: Prefix is an optional key prefix within the mount.
+                        type: string
+                      tokenSecretRef:
+                        description: TokenSecretRef references a Secret with key "token"
+                          containing the Vault token.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                    required:
+                    - address
+                    - mount
+                    - tokenSecretRef
+                    type: object
+                required:
+                - mode
+                type: object
+              resources:
+                description: Resources optionally constrains the Keyline container.
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This is an alpha field and requires enabling the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
+              virtualServer:
+                description: VirtualServer is the name of the initial virtual server
+                  to seed. Defaults to "keyline".
                 type: string
             required:
-            - configMapRef
-            - privateKeySecretRef
-            - url
-            - virtualServer
+            - database
+            - externalUrl
+            - frontendExternalUrl
+            - image
+            - keyStore
             type: object
           status:
             description: KeylineInstanceStatus defines the observed state of KeylineInstance.
             properties:
               conditions:
-                description: |-
-                  Conditions reflect the current state of the instance.
-
-                  "Ready" becomes True once the operator has bootstrapped and can authenticate
-                  against the Keyline API using the stored private key.
+                description: Conditions reflect the current state of the instance.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -177,6 +318,9 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              url:
+                description: URL is the in-cluster HTTP URL of the Keyline server.
+                type: string
             type: object
         required:
         - spec

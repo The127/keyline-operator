@@ -81,20 +81,20 @@ func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var secret corev1.Secret
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: proj.Namespace,
-		Name:      instance.Spec.PrivateKeySecretRef.Name,
+		Name:      instance.Name + credentialsSecret,
 	}, &secret); err != nil {
 		return r.setNotReady(ctx, &proj, "SecretNotFound", err.Error())
 	}
 
 	ts := &keylineclient.ServiceUserTokenSource{
-		KeylineURL:    instance.Spec.URL,
+		KeylineURL:    instance.Status.URL,
 		VirtualServer: instance.Spec.VirtualServer,
 		PrivKeyPEM:    string(secret.Data["private-key"]),
 		Kid:           string(secret.Data["key-id"]),
 		Username:      string(secret.Data["username"]),
-		Application:   adminApplication,
+		Application:   operatorApplication,
 	}
-	kc := keylineclient.NewClient(instance.Spec.URL, vs.Spec.Name, keylineclient.WithOidc(ts))
+	kc := keylineclient.NewClient(instance.Status.URL, vs.Spec.Name, keylineclient.WithOidc(ts))
 
 	_, err := kc.Project().Get(ctx, proj.Spec.Slug)
 	if err != nil {

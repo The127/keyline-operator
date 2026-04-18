@@ -33,17 +33,29 @@ import (
 
 var _ = Describe("KeylineInstance Controller", func() {
 	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+		const resourceName = "test-instance"
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "default",
 		}
 		keylineinstance := &keylinev1alpha1.KeylineInstance{}
 
 		BeforeEach(func() {
+			By("creating prerequisite secrets")
+			dbSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-db-creds", Namespace: "default"},
+				Data: map[string][]byte{
+					"username": []byte("keyline"),
+					"password": []byte("secret"),
+				},
+			}
+			if err := k8sClient.Create(ctx, dbSecret); err != nil && !errors.IsAlreadyExists(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
 			By("creating the custom resource for the Kind KeylineInstance")
 			err := k8sClient.Get(ctx, typeNamespacedName, keylineinstance)
 			if err != nil && errors.IsNotFound(err) {
@@ -53,10 +65,19 @@ var _ = Describe("KeylineInstance Controller", func() {
 						Namespace: "default",
 					},
 					Spec: keylinev1alpha1.KeylineInstanceSpec{
-						URL:                 "https://keyline.example.com",
-						VirtualServer:       "default",
-						ConfigMapRef:        corev1.LocalObjectReference{Name: "keyline-config"},
-						PrivateKeySecretRef: corev1.LocalObjectReference{Name: "keyline-credentials"},
+						Image:               "ghcr.io/the127/keyline:latest",
+						ExternalUrl:         "https://keyline.example.com",
+						FrontendExternalUrl: "https://app.example.com",
+						VirtualServer:       "keyline",
+						Database: keylinev1alpha1.KeylineInstanceDatabaseSpec{
+							Postgres: keylinev1alpha1.KeylineInstancePostgresSpec{
+								Host:                 "postgres.default.svc",
+								CredentialsSecretRef: corev1.LocalObjectReference{Name: "test-db-creds"},
+							},
+						},
+						KeyStore: keylinev1alpha1.KeylineInstanceKeyStoreSpec{
+							Mode: "directory",
+						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -64,15 +85,21 @@ var _ = Describe("KeylineInstance Controller", func() {
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &keylinev1alpha1.KeylineInstance{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleanup the specific resource instance KeylineInstance")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+			dbSecret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-db-creds", Namespace: "default"}, dbSecret)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, dbSecret)).To(Succeed())
+			}
 		})
-		It("should successfully reconcile the resource", func() {
+
+		It("should generate operator credentials and create dependent resources", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &KeylineInstanceReconciler{
 				Client: k8sClient,
@@ -83,8 +110,31 @@ var _ = Describe("KeylineInstance Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			By("Checking that the credentials Secret was created")
+			credSecret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName + credentialsSecret,
+				Namespace: "default",
+			}, credSecret)).To(Succeed())
+			Expect(credSecret.Data).To(HaveKey("private-key"))
+			Expect(credSecret.Data).To(HaveKey("public-key"))
+			Expect(credSecret.Data).To(HaveKey("key-id"))
+
+			By("Checking that the config Secret was created")
+			cfgSecret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName + configSecret,
+				Namespace: "default",
+			}, cfgSecret)).To(Succeed())
+			Expect(cfgSecret.Data).To(HaveKey("config.yaml"))
+
+			By("Checking that the PVC was created")
+			pvc := &corev1.PersistentVolumeClaim{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      resourceName + keysPVC,
+				Namespace: "default",
+			}, pvc)).To(Succeed())
 		})
 	})
 })

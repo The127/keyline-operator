@@ -73,10 +73,17 @@ var _ = Describe("KeylineVirtualServer Controller", func() {
 			instance := &keylinev1alpha1.KeylineInstance{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-instance", Namespace: namespace},
 				Spec: keylinev1alpha1.KeylineInstanceSpec{
-					URL:                 "http://keyline.example.com",
+					Image:               "ghcr.io/the127/keyline:latest",
+					ExternalUrl:         "http://keyline.example.com",
+					FrontendExternalUrl: "http://app.example.com",
 					VirtualServer:       "main",
-					ConfigMapRef:        corev1.LocalObjectReference{Name: "cfg"},
-					PrivateKeySecretRef: corev1.LocalObjectReference{Name: "secret"},
+					Database: keylinev1alpha1.KeylineInstanceDatabaseSpec{
+						Postgres: keylinev1alpha1.KeylineInstancePostgresSpec{
+							Host:                 "postgres",
+							CredentialsSecretRef: corev1.LocalObjectReference{Name: "pg-creds"},
+						},
+					},
+					KeyStore: keylinev1alpha1.KeylineInstanceKeyStoreSpec{Mode: "directory"},
 				},
 			}
 			Expect(k8sClient.Create(ctx, instance)).To(Succeed())

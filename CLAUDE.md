@@ -4,7 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Kubernetes operator that manages [Keyline](../Keyline) — a self-hosted OIDC/IDP server. The operator bootstraps a service-user identity into a K8s Secret on first run, then uses that identity to reconcile custom resources against the Keyline Management API.
+A Kubernetes operator that manages [Keyline](../Keyline) — a self-hosted OIDC/IDP server. Modelled after the Postgres operator pattern: declaring a `KeylineInstance` CR brings a Keyline server into existence. The operator:
+
+1. Generates an Ed25519 keypair and stores the private key in a Secret.
+2. Builds a Keyline `config.yaml` (ConfigMap) with the service-user public key seeded under `initialVirtualServer.serviceUsers`.
+3. Provisions a PVC for the key store (when `keyStore.mode: directory`).
+4. Creates a Deployment and Service for the Keyline server.
+5. Waits for the pod to be ready, then verifies connectivity via token exchange.
+6. Uses the operator service-user identity to reconcile all other CRDs against the Keyline Management API.
+
+The operator does **not** manage the database — the user supplies database connection details in the CRD spec.
 
 ## Commands
 
@@ -22,22 +31,53 @@ go test ./... -run TestXxx  # run a single test
 
 ## Architecture
 
-### Bootstrap flow
+### Bootstrap flow (per KeylineInstance)
 
-On startup the operator checks for a `keyline-operator` Secret in its namespace. If absent:
+On first reconcile the controller:
 
-1. Calls `POST /api/virtual-servers/{vs}/users/service-users` with the admin credentials supplied via env/Secret.
-2. Generates an Ed25519 keypair locally.
-3. Registers the public key via `POST /api/virtual-servers/{vs}/users/service-users/{id}/keys`.
-4. Persists the private key (PEM) and service-user metadata into a K8s Secret.
+1. Generates an Ed25519 keypair; stores private key + kid + username in a Secret named `<instance>-operator-credentials`.
+2. Builds `config.yaml` with the public key seeded in `initialVirtualServer.serviceUsers`; stores it in a ConfigMap named `<instance>-config`.
+3. Creates a PVC named `<instance>-keys` if `keyStore.mode: directory`.
+4. Creates a Deployment and ClusterIP Service. The Deployment mounts the ConfigMap and (if directory mode) the PVC.
+5. Once the Deployment is available, performs a token exchange to verify the operator identity works → sets `Ready: True`.
 
-All subsequent reconcilers obtain an access token by constructing a self-signed JWT (RFC 8693 token exchange) against `POST /oidc/{virtualServer}/token` using that private key.
+Subsequent reconcilers derive the Keyline URL from `http://<service>.<namespace>.svc.cluster.local` and obtain tokens using `keylineclient.ServiceUserTokenSource` with the stored private key.
 
-### Custom Resources (intended)
+### KeylineInstance spec shape
+
+```yaml
+spec:
+  image: ghcr.io/the127/keyline:v1.2.3   # required
+  externalUrl: https://keyline.example.com # required (used in Keyline config for OIDC redirects)
+  frontendExternalUrl: https://app.example.com # required
+  virtualServer: keyline                   # initialVirtualServer.name, default "keyline"
+  database:
+    postgres:
+      host: postgres.default.svc
+      port: 5432                           # default 5432
+      database: keyline                    # default "keyline"
+      sslMode: disable                     # default "enable"
+      credentialsSecretRef:
+        name: pg-credentials               # must have keys: username, password
+  keyStore:
+    mode: directory                        # or: vault
+    directory:
+      storageClassName: standard           # optional
+      storageSize: 1Gi                     # default "1Gi"
+    vault:                                 # only when mode: vault
+      address: https://vault.example.com
+      mount: keyline
+      prefix: ""                           # optional
+      tokenSecretRef:
+        name: vault-token                  # must have key: token
+  resources: {}                            # optional, passed to Deployment container
+```
+
+### Custom Resources
 
 | CRD | Keyline API surface |
 |-----|---------------------|
-| `KeylineInstance` | Top-level; holds API URL, bootstrap config, ref to operator Secret |
+| `KeylineInstance` | Deploys and owns a Keyline server; all other CRDs reference it |
 | `KeylineVirtualServer` | `PATCH /api/virtual-servers/{name}` |
 | `KeylineProject` | `/api/projects` |
 | `KeylineApplication` | `/api/projects/{slug}/applications` |
