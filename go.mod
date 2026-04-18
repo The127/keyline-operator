@@ -5,7 +5,7 @@ go 1.25.0
 godebug default=go1.23
 
 require (
-	github.com/The127/Keyline v0.3.9
+	github.com/The127/Keyline v0.3.10
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1

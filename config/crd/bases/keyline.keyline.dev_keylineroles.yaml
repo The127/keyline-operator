@@ -39,25 +39,40 @@ spec:
           spec:
             description: spec defines the desired state of KeylineRole
             properties:
-              foo:
-                description: foo is an example field of KeylineRole. Edit keylinerole_types.go
-                  to remove/update
+              description:
+                description: Description is an optional role description.
+                maxLength: 1024
                 type: string
+              name:
+                description: Name is the unique role identifier in Keyline.
+                maxLength: 255
+                minLength: 1
+                type: string
+              projectRef:
+                description: ProjectRef references the KeylineProject this role belongs
+                  to.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+            required:
+            - name
+            - projectRef
             type: object
           status:
             description: status defines the observed state of KeylineRole
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the KeylineRole resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
+                description: conditions represent the current state of the KeylineRole
+                  resource.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -116,6 +131,9 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              roleId:
+                description: RoleId is the UUID of the role in Keyline.
+                type: string
             type: object
         required:
         - spec
