@@ -70,7 +70,7 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if instance.Spec.Database.Postgres == nil {
 			return r.setNotReady(ctx, &instance, "InvalidSpec", "database.postgres is required when mode is postgres")
 		}
-		dbCreds, err := r.resolveSecret(ctx, instance.Namespace, instance.Spec.Database.Postgres.CredentialsSecretRef.Name, "username", "password")
+		dbCreds, err := resolveSecret(ctx, r.Client, instance.Namespace, instance.Spec.Database.Postgres.CredentialsSecretRef.Name, "username", "password")
 		if err != nil {
 			return r.setNotReady(ctx, &instance, "DBCredentialsError", err.Error())
 		}
@@ -82,7 +82,7 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if instance.Spec.KeyStore.Vault == nil {
 			return r.setNotReady(ctx, &instance, "InvalidSpec", "keyStore.vault is required when mode is vault")
 		}
-		vaultCreds, err := r.resolveSecret(ctx, instance.Namespace, instance.Spec.KeyStore.Vault.TokenSecretRef.Name, "token")
+		vaultCreds, err := resolveSecret(ctx, r.Client, instance.Namespace, instance.Spec.KeyStore.Vault.TokenSecretRef.Name, "token")
 		if err != nil {
 			return r.setNotReady(ctx, &instance, "VaultTokenError", err.Error())
 		}
@@ -196,23 +196,6 @@ func (r *KeylineInstanceReconciler) ensureCredentials(ctx context.Context, insta
 		return "", "", "", fmt.Errorf("creating credentials secret: %w", err)
 	}
 	return privKeyPEM, pubKeyPEM, kid, nil
-}
-
-// resolveSecret reads one or more keys from a Secret and returns their string values in order.
-func (r *KeylineInstanceReconciler) resolveSecret(ctx context.Context, namespace, name string, keys ...string) ([]string, error) {
-	var secret corev1.Secret
-	if err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &secret); err != nil {
-		return nil, fmt.Errorf("reading secret %s: %w", name, err)
-	}
-	values := make([]string, len(keys))
-	for i, key := range keys {
-		v, ok := secret.Data[key]
-		if !ok {
-			return nil, fmt.Errorf("secret %s missing key %q", name, key)
-		}
-		values[i] = string(v)
-	}
-	return values, nil
 }
 
 // ensureConfigSecret creates or updates the Keyline config.yaml Secret.
