@@ -23,27 +23,8 @@ var _ = Describe("KeylineVirtualServer", Ordered, func() {
 	)
 
 	BeforeAll(func() {
-		By("installing CRDs")
-		cmd := exec.Command("make", "install")
-		_, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
-
-		By("deploying the operator")
-		cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to deploy operator")
-
-		By("waiting for the operator to be ready")
-		cmd = exec.Command("kubectl", "wait", "deployment/keyline-operator-controller-manager",
-			"-n", "keyline-operator-system",
-			"--for=condition=Available",
-			"--timeout=2m",
-		)
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Operator did not become ready in time")
-
 		By("creating the e2e test namespace")
-		cmd = exec.Command("kubectl", "create", "ns", testNamespace)
+		cmd := exec.Command("kubectl", "create", "ns", testNamespace)
 		_, _ = utils.Run(cmd)
 
 		By("creating the KeylineInstance")
@@ -54,7 +35,7 @@ metadata:
   name: %s
   namespace: %s
 spec:
-  image: ghcr.io/the127/keyline:v0.3.8
+  image: ghcr.io/the127/keyline:v0.3.9
   externalUrl: http://keyline.test
   frontendExternalUrl: http://frontend.test
   virtualServer: keyline
@@ -66,7 +47,7 @@ spec:
 
 		cmd = exec.Command("kubectl", "apply", "-f", "-")
 		cmd.Stdin = strings.NewReader(manifest)
-		_, err = utils.Run(cmd)
+		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to create KeylineInstance")
 
 		By("waiting for the KeylineInstance to become Ready")
@@ -87,14 +68,6 @@ spec:
 	AfterAll(func() {
 		By("removing the e2e test namespace")
 		cmd := exec.Command("kubectl", "delete", "ns", testNamespace, "--ignore-not-found=true")
-		_, _ = utils.Run(cmd)
-
-		By("undeploying the operator")
-		cmd = exec.Command("make", "undeploy")
-		_, _ = utils.Run(cmd)
-
-		By("uninstalling CRDs")
-		cmd = exec.Command("make", "uninstall")
 		_, _ = utils.Run(cmd)
 	})
 
