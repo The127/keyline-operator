@@ -45,6 +45,7 @@ func newOperatorClient(ctx context.Context, c k8sclient.Client, namespace string
 
 // setNotReadyCondition marks obj not-ready and persists the status update.
 func setNotReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient.Object, conditions *[]metav1.Condition, reason, msg string) (ctrl.Result, error) {
+	base := obj.DeepCopyObject().(k8sclient.Object)
 	meta.SetStatusCondition(conditions, metav1.Condition{
 		Type:               keylinev1alpha1.ConditionReady,
 		Status:             metav1.ConditionFalse,
@@ -52,7 +53,7 @@ func setNotReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient
 		Message:            msg,
 		LastTransitionTime: metav1.Now(),
 	})
-	if err := c.Status().Update(ctx, obj); err != nil {
+	if err := c.Status().Patch(ctx, obj, k8sclient.MergeFrom(base)); err != nil {
 		return ReconcileErrorf("updating status: %w", err)
 	}
 	return ReconcileAfter(requeueAfter)
@@ -60,6 +61,7 @@ func setNotReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient
 
 // setReadyCondition marks obj ready and persists the status update.
 func setReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient.Object, conditions *[]metav1.Condition, reason, msg string) (ctrl.Result, error) {
+	base := obj.DeepCopyObject().(k8sclient.Object)
 	meta.SetStatusCondition(conditions, metav1.Condition{
 		Type:               keylinev1alpha1.ConditionReady,
 		Status:             metav1.ConditionTrue,
@@ -67,7 +69,7 @@ func setReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient.Ob
 		Message:            msg,
 		LastTransitionTime: metav1.Now(),
 	})
-	if err := c.Status().Update(ctx, obj); err != nil {
+	if err := c.Status().Patch(ctx, obj, k8sclient.MergeFrom(base)); err != nil {
 		return ReconcileErrorf("updating status: %w", err)
 	}
 	return ReconcileAfter(requeueAfter)
