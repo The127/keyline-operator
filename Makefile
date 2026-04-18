@@ -109,6 +109,8 @@ run: manifests generate fmt vet ## Run a controller from your host.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager-linux-amd64 cmd/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -o manager-linux-arm64 cmd/main.go
 	$(CONTAINER_TOOL) build -t ${IMG} .
 
 .PHONY: docker-push
