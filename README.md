@@ -219,4 +219,4 @@ make lint        # run golangci-lint
 
 ## License
 
-Copyright 2026. Licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+Copyright 2026. Licensed under the [GNU Affero General Public License v3.0](LICENSE).
