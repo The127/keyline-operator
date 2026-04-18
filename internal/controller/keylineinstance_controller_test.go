@@ -70,7 +70,8 @@ var _ = Describe("KeylineInstance Controller", func() {
 						FrontendExternalUrl: "https://app.example.com",
 						VirtualServer:       "keyline",
 						Database: keylinev1alpha1.KeylineInstanceDatabaseSpec{
-							Postgres: keylinev1alpha1.KeylineInstancePostgresSpec{
+							Mode: "postgres",
+							Postgres: &keylinev1alpha1.KeylineInstancePostgresSpec{
 								Host:                 "postgres.default.svc",
 								CredentialsSecretRef: corev1.LocalObjectReference{Name: "test-db-creds"},
 							},

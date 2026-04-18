@@ -64,9 +64,16 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return r.setNotReady(ctx, &instance, "CredentialsError", err.Error())
 	}
 
-	dbCreds, err := r.resolveSecret(ctx, instance.Namespace, instance.Spec.Database.Postgres.CredentialsSecretRef.Name, "username", "password")
-	if err != nil {
-		return r.setNotReady(ctx, &instance, "DBCredentialsError", err.Error())
+	var dbUser, dbPass string
+	if instance.Spec.Database.Mode == "postgres" {
+		if instance.Spec.Database.Postgres == nil {
+			return r.setNotReady(ctx, &instance, "InvalidSpec", "database.postgres is required when mode is postgres")
+		}
+		dbCreds, err := r.resolveSecret(ctx, instance.Namespace, instance.Spec.Database.Postgres.CredentialsSecretRef.Name, "username", "password")
+		if err != nil {
+			return r.setNotReady(ctx, &instance, "DBCredentialsError", err.Error())
+		}
+		dbUser, dbPass = dbCreds[0], dbCreds[1]
 	}
 
 	var vaultToken string
@@ -81,7 +88,7 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		vaultToken = vaultCreds[0]
 	}
 
-	configData, configHash, err := buildKeylineConfig(&instance, pubKeyPEM, kid, dbCreds[0], dbCreds[1], vaultToken)
+	configData, configHash, err := buildKeylineConfig(&instance, pubKeyPEM, kid, dbUser, dbPass, vaultToken)
 	if err != nil {
 		return r.setNotReady(ctx, &instance, "ConfigBuildError", err.Error())
 	}

@@ -58,9 +58,14 @@ type KeylineInstanceSpec struct {
 
 // KeylineInstanceDatabaseSpec configures the Keyline database.
 type KeylineInstanceDatabaseSpec struct {
-	// Postgres configures a PostgreSQL database.
+	// Mode is the database backend. One of: postgres, memory.
 	// +kubebuilder:validation:Required
-	Postgres KeylineInstancePostgresSpec `json:"postgres"`
+	// +kubebuilder:validation:Enum=postgres;memory
+	Mode string `json:"mode"`
+
+	// Postgres configures a PostgreSQL database. Required when mode is "postgres".
+	// +optional
+	Postgres *KeylineInstancePostgresSpec `json:"postgres,omitempty"`
 }
 
 // KeylineInstancePostgresSpec holds PostgreSQL connection parameters.

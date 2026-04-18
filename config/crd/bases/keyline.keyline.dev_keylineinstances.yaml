@@ -58,8 +58,16 @@ spec:
               database:
                 description: Database configures the Keyline database connection.
                 properties:
+                  mode:
+                    description: 'Mode is the database backend. One of: postgres,
+                      memory.'
+                    enum:
+                    - postgres
+                    - memory
+                    type: string
                   postgres:
-                    description: Postgres configures a PostgreSQL database.
+                    description: Postgres configures a PostgreSQL database. Required
+                      when mode is "postgres".
                     properties:
                       credentialsSecretRef:
                         description: CredentialsSecretRef references a Secret with
@@ -101,7 +109,7 @@ spec:
                     - host
                     type: object
                 required:
-                - postgres
+                - mode
                 type: object
               externalUrl:
                 description: ExternalUrl is the public-facing URL of the Keyline server,

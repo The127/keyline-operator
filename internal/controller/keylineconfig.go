@@ -118,18 +118,35 @@ func buildKeylineConfig(
 		vs = "keyline"
 	}
 
-	pg := instance.Spec.Database.Postgres
-	pgPort := int(pg.Port)
-	if pgPort == 0 {
-		pgPort = 5432
-	}
-	dbName := pg.Database
-	if dbName == "" {
-		dbName = "keyline"
-	}
-	sslMode := pg.SslMode
-	if sslMode == "" {
-		sslMode = "enable"
+	var dbCfg keylineDatabaseCfg
+	switch instance.Spec.Database.Mode {
+	case "memory":
+		dbCfg = keylineDatabaseCfg{Mode: "memory"}
+	default:
+		pg := instance.Spec.Database.Postgres
+		pgPort := int(pg.Port)
+		if pgPort == 0 {
+			pgPort = 5432
+		}
+		dbName := pg.Database
+		if dbName == "" {
+			dbName = "keyline"
+		}
+		sslMode := pg.SslMode
+		if sslMode == "" {
+			sslMode = "enable"
+		}
+		dbCfg = keylineDatabaseCfg{
+			Mode: "postgres",
+			Postgres: keylinePostgresCfg{
+				Host:     pg.Host,
+				Port:     pgPort,
+				Database: dbName,
+				Username: dbUser,
+				Password: dbPass,
+				SslMode:  sslMode,
+			},
+		}
 	}
 
 	cfg := keylineConfigYAML{
@@ -142,17 +159,7 @@ func buildKeylineConfig(
 		Frontend: keylineFrontendCfg{
 			ExternalURL: instance.Spec.FrontendExternalUrl,
 		},
-		Database: keylineDatabaseCfg{
-			Mode: "postgres",
-			Postgres: keylinePostgresCfg{
-				Host:     pg.Host,
-				Port:     pgPort,
-				Database: dbName,
-				Username: dbUser,
-				Password: dbPass,
-				SslMode:  sslMode,
-			},
-		},
+		Database: dbCfg,
 		InitialVirtualServer: keylineInitialVirtualServerCfg{
 			Name:                  vs,
 			EnableRegistration:    false,
