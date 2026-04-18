@@ -15,7 +15,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -364,32 +363,12 @@ func (r *KeylineInstanceReconciler) isDeploymentAvailable(ctx context.Context, i
 }
 
 func (r *KeylineInstanceReconciler) setNotReady(ctx context.Context, instance *keylinev1alpha1.KeylineInstance, reason, msg string) (ctrl.Result, error) {
-	meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
-		Type:               keylinev1alpha1.ConditionReady,
-		Status:             metav1.ConditionFalse,
-		Reason:             reason,
-		Message:            msg,
-		LastTransitionTime: metav1.Now(),
-	})
-	if err := r.Status().Update(ctx, instance); err != nil {
-		return ReconcileErrorf("updating status: %w", err)
-	}
-	return ReconcileAfter(requeueAfter)
+	return setNotReadyCondition(ctx, r.Client, instance, &instance.Status.Conditions, reason, msg)
 }
 
 func (r *KeylineInstanceReconciler) setReady(ctx context.Context, instance *keylinev1alpha1.KeylineInstance, svcURL string) (ctrl.Result, error) {
 	instance.Status.URL = svcURL
-	meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
-		Type:               keylinev1alpha1.ConditionReady,
-		Status:             metav1.ConditionTrue,
-		Reason:             "Ready",
-		Message:            "Keyline is deployed and token exchange succeeded",
-		LastTransitionTime: metav1.Now(),
-	})
-	if err := r.Status().Update(ctx, instance); err != nil {
-		return ReconcileErrorf("updating status: %w", err)
-	}
-	return ReconcileAfter(requeueAfter)
+	return setReadyCondition(ctx, r.Client, instance, &instance.Status.Conditions, "Ready", "Keyline is deployed and token exchange succeeded")
 }
 
 func instanceLabels(instance *keylinev1alpha1.KeylineInstance) map[string]string {

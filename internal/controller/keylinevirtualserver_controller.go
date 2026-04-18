@@ -7,7 +7,6 @@ import (
 
 	keylineclient "github.com/The127/Keyline/client"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -90,32 +89,11 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 	}
 
-	meta.SetStatusCondition(&vs.Status.Conditions, metav1.Condition{
-		Type:               keylinev1alpha1.ConditionReady,
-		Status:             metav1.ConditionTrue,
-		Reason:             "Synced",
-		Message:            "Virtual server is in sync",
-		LastTransitionTime: metav1.Now(),
-	})
-	if err := r.Status().Update(ctx, &vs); err != nil {
-		return ReconcileErrorf("updating status: %w", err)
-	}
-
-	return ReconcileAfter(requeueAfter)
+	return setReadyCondition(ctx, r.Client, &vs, &vs.Status.Conditions, "Synced", "Virtual server is in sync")
 }
 
 func (r *KeylineVirtualServerReconciler) setNotReady(ctx context.Context, vs *keylinev1alpha1.KeylineVirtualServer, reason, msg string) (ctrl.Result, error) {
-	meta.SetStatusCondition(&vs.Status.Conditions, metav1.Condition{
-		Type:               keylinev1alpha1.ConditionReady,
-		Status:             metav1.ConditionFalse,
-		Reason:             reason,
-		Message:            msg,
-		LastTransitionTime: metav1.Now(),
-	})
-	if err := r.Status().Update(ctx, vs); err != nil {
-		return ReconcileErrorf("updating status: %w", err)
-	}
-	return ReconcileAfter(requeueAfter)
+	return setNotReadyCondition(ctx, r.Client, vs, &vs.Status.Conditions, reason, msg)
 }
 
 // SetupWithManager sets up the controller with the Manager.

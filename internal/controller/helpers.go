@@ -6,7 +6,10 @@ import (
 
 	keylineclient "github.com/The127/Keyline/client"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	keylinev1alpha1 "github.com/keyline/keyline-operator/api/v1alpha1"
@@ -36,6 +39,36 @@ func newOperatorClient(ctx context.Context, c k8sclient.Client, namespace string
 		Application:   operatorApplication,
 	}
 	return keylineclient.NewClient(instance.Status.URL, virtualServerName, keylineclient.WithOidc(ts)), nil
+}
+
+// setNotReadyCondition marks obj not-ready and persists the status update.
+func setNotReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient.Object, conditions *[]metav1.Condition, reason, msg string) (ctrl.Result, error) {
+	meta.SetStatusCondition(conditions, metav1.Condition{
+		Type:               keylinev1alpha1.ConditionReady,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            msg,
+		LastTransitionTime: metav1.Now(),
+	})
+	if err := c.Status().Update(ctx, obj); err != nil {
+		return ReconcileErrorf("updating status: %w", err)
+	}
+	return ReconcileAfter(requeueAfter)
+}
+
+// setReadyCondition marks obj ready and persists the status update.
+func setReadyCondition(ctx context.Context, c k8sclient.Client, obj k8sclient.Object, conditions *[]metav1.Condition, reason, msg string) (ctrl.Result, error) {
+	meta.SetStatusCondition(conditions, metav1.Condition{
+		Type:               keylinev1alpha1.ConditionReady,
+		Status:             metav1.ConditionTrue,
+		Reason:             reason,
+		Message:            msg,
+		LastTransitionTime: metav1.Now(),
+	})
+	if err := c.Status().Update(ctx, obj); err != nil {
+		return ReconcileErrorf("updating status: %w", err)
+	}
+	return ReconcileAfter(requeueAfter)
 }
 
 // resolveSecret reads one or more keys from a Secret and returns their string values in order.

@@ -24,7 +24,6 @@ import (
 	keylineapi "github.com/The127/Keyline/api"
 	keylineclient "github.com/The127/Keyline/client"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -105,32 +104,11 @@ func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}
 
-	meta.SetStatusCondition(&proj.Status.Conditions, metav1.Condition{
-		Type:               keylinev1alpha1.ConditionReady,
-		Status:             metav1.ConditionTrue,
-		Reason:             "Synced",
-		Message:            "Project exists in Keyline",
-		LastTransitionTime: metav1.Now(),
-	})
-	if err := r.Status().Update(ctx, &proj); err != nil {
-		return ReconcileErrorf("updating status: %w", err)
-	}
-
-	return ReconcileAfter(requeueAfter)
+	return setReadyCondition(ctx, r.Client, &proj, &proj.Status.Conditions, "Synced", "Project exists in Keyline")
 }
 
 func (r *KeylineProjectReconciler) setNotReady(ctx context.Context, proj *keylinev1alpha1.KeylineProject, reason, msg string) (ctrl.Result, error) {
-	meta.SetStatusCondition(&proj.Status.Conditions, metav1.Condition{
-		Type:               keylinev1alpha1.ConditionReady,
-		Status:             metav1.ConditionFalse,
-		Reason:             reason,
-		Message:            msg,
-		LastTransitionTime: metav1.Now(),
-	})
-	if err := r.Status().Update(ctx, proj); err != nil {
-		return ReconcileErrorf("updating status: %w", err)
-	}
-	return ReconcileAfter(requeueAfter)
+	return setNotReadyCondition(ctx, r.Client, proj, &proj.Status.Conditions, reason, msg)
 }
 
 // SetupWithManager sets up the controller with the Manager.
