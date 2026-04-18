@@ -33,6 +33,7 @@ type KeylineVirtualServerReconciler struct {
 // Reconcile reconciles a KeylineVirtualServer against the Keyline Management API.
 func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+	log.Info("reconciling KeylineVirtualServer")
 
 	var vs keylinev1alpha1.KeylineVirtualServer
 	if err := r.Get(ctx, req.NamespacedName, &vs); err != nil {

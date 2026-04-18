@@ -53,6 +53,7 @@ type KeylineInstanceReconciler struct {
 // Reconcile deploys and configures a Keyline server for the given KeylineInstance.
 func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+	log.Info("reconciling KeylineInstance")
 
 	var instance keylinev1alpha1.KeylineInstance
 	if err := r.Get(ctx, req.NamespacedName, &instance); err != nil {

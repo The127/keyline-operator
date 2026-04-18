@@ -51,6 +51,7 @@ type KeylineProjectReconciler struct {
 // Reconcile reconciles a KeylineProject against the Keyline Management API.
 func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+	log.Info("reconciling KeylineProject")
 
 	var proj keylinev1alpha1.KeylineProject
 	if err := r.Get(ctx, req.NamespacedName, &proj); err != nil {
