@@ -66,7 +66,7 @@ metadata:
   name: %s
   namespace: %s
 spec:
-  image: ghcr.io/the127/keyline:v0.3.3
+  image: ghcr.io/the127/keyline:v0.3.8
   externalUrl: http://keyline.test
   frontendExternalUrl: http://frontend.test
   virtualServer: keyline
