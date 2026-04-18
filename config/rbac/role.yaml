@@ -5,12 +5,47 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - services
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - keyline.keyline.dev
   resources:
   - keylineapplications
+  - keylineinstances
+  - keylineprojects
   - keylineroleassignments
   - keylineroles
   - keylineusers
+  - keylinevirtualservers
   verbs:
   - create
   - delete
@@ -23,18 +58,24 @@ rules:
   - keyline.keyline.dev
   resources:
   - keylineapplications/finalizers
+  - keylineinstances/finalizers
+  - keylineprojects/finalizers
   - keylineroleassignments/finalizers
   - keylineroles/finalizers
   - keylineusers/finalizers
+  - keylinevirtualservers/finalizers
   verbs:
   - update
 - apiGroups:
   - keyline.keyline.dev
   resources:
   - keylineapplications/status
+  - keylineinstances/status
+  - keylineprojects/status
   - keylineroleassignments/status
   - keylineroles/status
   - keylineusers/status
+  - keylinevirtualservers/status
   verbs:
   - get
   - patch

@@ -36,8 +36,6 @@ const (
 	keysPVC           = "-keys"
 )
 
-// KeylineInstanceReconciler reconciles a KeylineInstance object.
-//
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineinstances,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineinstances/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineinstances/finalizers,verbs=update
@@ -45,6 +43,8 @@ const (
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch
+
+// KeylineInstanceReconciler reconciles a KeylineInstance object.
 type KeylineInstanceReconciler struct {
 	k8sclient.Client
 	Scheme *runtime.Scheme
@@ -345,9 +345,10 @@ func (r *KeylineInstanceReconciler) ensureDeployment(ctx context.Context, instan
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "keyline",
-							Image: instance.Spec.Image,
-							Args:  []string{"--config", configFilePath, "--environment", "PRODUCTION"},
+							Name:    "keyline",
+							Image:   instance.Spec.Image,
+							Command: []string{"/app/api"},
+							Args:    []string{"--config", configFilePath, "--environment", "PRODUCTION"},
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: keylinePort, Protocol: corev1.ProtocolTCP},
 							},
