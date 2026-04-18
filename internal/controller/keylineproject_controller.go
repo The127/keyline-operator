@@ -18,40 +18,132 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"net/http"
 
+	keylineapi "github.com/The127/Keyline/api"
+	keylineclient "github.com/The127/Keyline/client"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	keylinev1alpha1 "github.com/keyline/keyline-operator/api/v1alpha1"
 )
 
 // KeylineProjectReconciler reconciles a KeylineProject object
-type KeylineProjectReconciler struct {
-	client.Client
-	Scheme *runtime.Scheme
-}
-
+//
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineprojects,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineprojects/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineprojects/finalizers,verbs=update
+// +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylinevirtualservers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineinstances,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+type KeylineProjectReconciler struct {
+	k8sclient.Client
+	Scheme *runtime.Scheme
+}
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the KeylineProject object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/reconcile
-func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+// Reconcile reconciles a KeylineProject against the Keyline Management API.
+func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	var proj keylinev1alpha1.KeylineProject
+	if err := r.Get(ctx, req.NamespacedName, &proj); err != nil {
+		return ReconcileError(k8sclient.IgnoreNotFound(err))
+	}
 
-	return ReconcileSuccess()
+	var vs keylinev1alpha1.KeylineVirtualServer
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: proj.Namespace,
+		Name:      proj.Spec.VirtualServerRef.Name,
+	}, &vs); err != nil {
+		return r.setNotReady(ctx, &proj, "VirtualServerNotFound", err.Error())
+	}
+
+	if !meta.IsStatusConditionTrue(vs.Status.Conditions, keylinev1alpha1.ConditionReady) {
+		log.Info("KeylineVirtualServer not ready, requeueing")
+		return r.setNotReady(ctx, &proj, "VirtualServerNotReady", "KeylineVirtualServer is not ready")
+	}
+
+	var instance keylinev1alpha1.KeylineInstance
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: proj.Namespace,
+		Name:      vs.Spec.InstanceRef.Name,
+	}, &instance); err != nil {
+		return r.setNotReady(ctx, &proj, "InstanceNotFound", err.Error())
+	}
+
+	var secret corev1.Secret
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: proj.Namespace,
+		Name:      instance.Spec.PrivateKeySecretRef.Name,
+	}, &secret); err != nil {
+		return r.setNotReady(ctx, &proj, "SecretNotFound", err.Error())
+	}
+
+	ts := &keylineclient.ServiceUserTokenSource{
+		KeylineURL:    instance.Spec.URL,
+		VirtualServer: instance.Spec.VirtualServer,
+		PrivKeyPEM:    string(secret.Data["private-key"]),
+		Kid:           string(secret.Data["key-id"]),
+		Username:      string(secret.Data["username"]),
+		Application:   adminApplication,
+	}
+	kc := keylineclient.NewClient(instance.Spec.URL, vs.Spec.Name, keylineclient.WithOidc(ts))
+
+	_, err := kc.Project().Get(ctx, proj.Spec.Slug)
+	if err != nil {
+		var apiErr keylineclient.ApiError
+		if errors.As(err, &apiErr) && apiErr.Code == http.StatusNotFound {
+			description := ""
+			if proj.Spec.Description != nil {
+				description = *proj.Spec.Description
+			}
+			if _, createErr := kc.Project().Create(ctx, keylineapi.CreateProjectRequestDto{
+				Slug:        proj.Spec.Slug,
+				Name:        proj.Spec.Name,
+				Description: description,
+			}); createErr != nil {
+				log.Error(createErr, "failed to create project")
+				return r.setNotReady(ctx, &proj, "CreateFailed", createErr.Error())
+			}
+		} else {
+			log.Error(err, "failed to get project")
+			return r.setNotReady(ctx, &proj, "GetFailed", err.Error())
+		}
+	}
+
+	meta.SetStatusCondition(&proj.Status.Conditions, metav1.Condition{
+		Type:               keylinev1alpha1.ConditionReady,
+		Status:             metav1.ConditionTrue,
+		Reason:             "Synced",
+		Message:            "Project exists in Keyline",
+		LastTransitionTime: metav1.Now(),
+	})
+	if err := r.Status().Update(ctx, &proj); err != nil {
+		return ReconcileErrorf("updating status: %w", err)
+	}
+
+	return ReconcileAfter(requeueAfter)
+}
+
+func (r *KeylineProjectReconciler) setNotReady(ctx context.Context, proj *keylinev1alpha1.KeylineProject, reason, msg string) (ctrl.Result, error) {
+	meta.SetStatusCondition(&proj.Status.Conditions, metav1.Condition{
+		Type:               keylinev1alpha1.ConditionReady,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            msg,
+		LastTransitionTime: metav1.Now(),
+	})
+	if err := r.Status().Update(ctx, proj); err != nil {
+		return ReconcileErrorf("updating status: %w", err)
+	}
+	return ReconcileAfter(requeueAfter)
 }
 
 // SetupWithManager sets up the controller with the Manager.

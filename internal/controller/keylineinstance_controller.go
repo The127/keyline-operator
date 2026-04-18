@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	keylineclient "github.com/The127/Keyline/client"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +18,10 @@ import (
 	keylinev1alpha1 "github.com/keyline/keyline-operator/api/v1alpha1"
 )
 
-const requeueAfter = 30 * time.Second
+const (
+	requeueAfter    = 30 * time.Second
+	adminApplication = "admin-ui"
+)
 
 // KeylineInstanceReconciler reconciles a KeylineInstance object.
 //
@@ -48,12 +52,13 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return r.setNotReady(ctx, &instance, "PrivateKeySecretNotFound", err.Error())
 	}
 
-	ts := &serviceUserTokenSource{
-		keylineURL:    instance.Spec.URL,
-		virtualServer: instance.Spec.VirtualServer,
-		privKeyPEM:    string(secret.Data["private-key"]),
-		kid:           string(secret.Data["key-id"]),
-		username:      string(secret.Data["username"]),
+	ts := &keylineclient.ServiceUserTokenSource{
+		KeylineURL:    instance.Spec.URL,
+		VirtualServer: instance.Spec.VirtualServer,
+		PrivKeyPEM:    string(secret.Data["private-key"]),
+		Kid:           string(secret.Data["key-id"]),
+		Username:      string(secret.Data["username"]),
+		Application:   adminApplication,
 	}
 
 	if _, err := ts.Token(); err != nil {

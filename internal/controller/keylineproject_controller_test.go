@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	keylinev1alpha1 "github.com/keyline/keyline-operator/api/v1alpha1"
@@ -51,7 +52,11 @@ var _ = Describe("KeylineProject Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: keylinev1alpha1.KeylineProjectSpec{
+						VirtualServerRef: corev1.LocalObjectReference{Name: "test-vs"},
+						Slug:             "test-project",
+						Name:             "Test Project",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}

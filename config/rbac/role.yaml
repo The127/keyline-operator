@@ -8,7 +8,6 @@ rules:
   - keyline.keyline.dev
   resources:
   - keylineapplications
-  - keylineprojects
   - keylineroleassignments
   - keylineroles
   - keylineusers
@@ -24,7 +23,6 @@ rules:
   - keyline.keyline.dev
   resources:
   - keylineapplications/finalizers
-  - keylineprojects/finalizers
   - keylineroleassignments/finalizers
   - keylineroles/finalizers
   - keylineusers/finalizers
@@ -34,7 +32,6 @@ rules:
   - keyline.keyline.dev
   resources:
   - keylineapplications/status
-  - keylineprojects/status
   - keylineroleassignments/status
   - keylineroles/status
   - keylineusers/status

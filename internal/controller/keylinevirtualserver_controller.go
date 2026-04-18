@@ -5,6 +5,7 @@ package controller
 import (
 	"context"
 
+	keylineclient "github.com/The127/Keyline/client"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,22 +60,23 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 		return r.setNotReady(ctx, &vs, "SecretNotFound", err.Error())
 	}
 
-	ts := &serviceUserTokenSource{
-		keylineURL:    instance.Spec.URL,
-		virtualServer: instance.Spec.VirtualServer,
-		privKeyPEM:    string(secret.Data["private-key"]),
-		kid:           string(secret.Data["key-id"]),
-		username:      string(secret.Data["username"]),
+	ts := &keylineclient.ServiceUserTokenSource{
+		KeylineURL:    instance.Spec.URL,
+		VirtualServer: instance.Spec.VirtualServer,
+		PrivKeyPEM:    string(secret.Data["private-key"]),
+		Kid:           string(secret.Data["key-id"]),
+		Username:      string(secret.Data["username"]),
+		Application:   adminApplication,
 	}
-	client := newKeylineClient(instance.Spec.URL, ts)
+	kc := keylineclient.NewClient(instance.Spec.URL, vs.Spec.Name, keylineclient.WithOidc(ts))
 
-	current, err := client.getVirtualServer(ctx, vs.Spec.Name)
+	current, err := kc.VirtualServer().Get(ctx)
 	if err != nil {
 		log.Error(err, "failed to get virtual server")
 		return r.setNotReady(ctx, &vs, "GetFailed", err.Error())
 	}
 
-	patch := patchVirtualServerRequest{}
+	patch := keylineclient.PatchVirtualServerInput{}
 	needsPatch := false
 
 	if vs.Spec.DisplayName != nil && *vs.Spec.DisplayName != current.DisplayName {
@@ -85,8 +87,8 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 		patch.EnableRegistration = vs.Spec.RegistrationEnabled
 		needsPatch = true
 	}
-	if vs.Spec.Require2FA != nil && *vs.Spec.Require2FA != current.Require2FA {
-		patch.Require2FA = vs.Spec.Require2FA
+	if vs.Spec.Require2FA != nil && *vs.Spec.Require2FA != current.Require2fa {
+		patch.Require2fa = vs.Spec.Require2FA
 		needsPatch = true
 	}
 	if vs.Spec.RequireEmailVerification != nil && *vs.Spec.RequireEmailVerification != current.RequireEmailVerification {
@@ -95,7 +97,7 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	if needsPatch {
-		if err := client.patchVirtualServer(ctx, vs.Spec.Name, patch); err != nil {
+		if err := kc.VirtualServer().Patch(ctx, patch); err != nil {
 			log.Error(err, "failed to patch virtual server")
 			return r.setNotReady(ctx, &vs, "PatchFailed", err.Error())
 		}
@@ -136,3 +138,4 @@ func (r *KeylineVirtualServerReconciler) SetupWithManager(mgr ctrl.Manager) erro
 		Named("keylinevirtualserver").
 		Complete(r)
 }
+
