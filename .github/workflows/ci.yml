@@ -10,6 +10,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GONOSUMDB: github.com/The127/Keyline
+
 jobs:
   lint:
     runs-on: ubuntu-latest

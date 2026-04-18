@@ -5,6 +5,7 @@ go 1.25.0
 godebug default=go1.23
 
 require (
+	github.com/The127/Keyline v0.3.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
@@ -103,5 +104,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/The127/Keyline => ../Keyline
