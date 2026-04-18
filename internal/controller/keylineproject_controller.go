@@ -35,14 +35,14 @@ import (
 	keylinev1alpha1 "github.com/keyline/keyline-operator/api/v1alpha1"
 )
 
-// KeylineProjectReconciler reconciles a KeylineProject object
-//
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineprojects,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineprojects/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineprojects/finalizers,verbs=update
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylinevirtualservers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineinstances,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
+// KeylineProjectReconciler reconciles a KeylineProject object.
 type KeylineProjectReconciler struct {
 	k8sclient.Client
 	Scheme *runtime.Scheme

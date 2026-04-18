@@ -18,13 +18,13 @@ import (
 	keylinev1alpha1 "github.com/keyline/keyline-operator/api/v1alpha1"
 )
 
-// KeylineVirtualServerReconciler reconciles a KeylineVirtualServer object.
-//
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylinevirtualservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylinevirtualservers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylinevirtualservers/finalizers,verbs=update
 // +kubebuilder:rbac:groups=keyline.keyline.dev,resources=keylineinstances,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
+// KeylineVirtualServerReconciler reconciles a KeylineVirtualServer object.
 type KeylineVirtualServerReconciler struct {
 	k8sclient.Client
 	Scheme *runtime.Scheme
