@@ -14,7 +14,7 @@ go vet ./...
 
 echo "→ golangci-lint"
 if command -v golangci-lint &>/dev/null; then
-  golangci-lint run --fast
+  golangci-lint run
 else
   echo "  golangci-lint not found, skipping (run 'make lint' in CI)"
 fi
