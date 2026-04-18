@@ -17,22 +17,19 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // KeylineRoleAssignmentSpec defines the desired state of KeylineRoleAssignment
 type KeylineRoleAssignmentSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// RoleRef references the KeylineRole to assign the user to.
+	// +kubebuilder:validation:Required
+	RoleRef corev1.LocalObjectReference `json:"roleRef"`
 
-	// foo is an example field of KeylineRoleAssignment. Edit keylineroleassignment_types.go to remove/update
-	// +optional
-	Foo *string `json:"foo,omitempty"`
+	// UserRef references the KeylineUser to assign to the role.
+	// +kubebuilder:validation:Required
+	UserRef corev1.LocalObjectReference `json:"userRef"`
 }
 
 // KeylineRoleAssignmentStatus defines the observed state of KeylineRoleAssignment.
