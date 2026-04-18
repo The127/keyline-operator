@@ -18,3 +18,6 @@ if command -v golangci-lint &>/dev/null; then
 else
   echo "  golangci-lint not found, skipping (run 'make lint' in CI)"
 fi
+
+echo "→ unit tests"
+make test
