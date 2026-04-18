@@ -93,12 +93,13 @@ spec:
   image: ghcr.io/the127/keyline:v1.2.3
   externalUrl: https://keyline.example.com
   frontendExternalUrl: https://app.example.com
+  virtualServer: main
   database:
     mode: postgres
     postgres:
       host: postgres.default.svc
       database: keyline
-      sslMode: disable
+      sslMode: require
       credentialsSecretRef:
         name: pg-credentials
   keyStore:
@@ -106,6 +107,10 @@ spec:
     directory:
       storageSize: 1Gi
 ```
+
+> **Important:** `spec.virtualServer` sets the name of the initial virtual server that the operator authenticates against. It must match the `spec.name` of your `KeylineVirtualServer` resources. The default is `keyline` — if you omit it, your `KeylineVirtualServer` names must also be `keyline`.
+
+> **Note:** `sslMode` must match your PostgreSQL server's `pg_hba.conf`. Most managed and operator-provisioned postgres instances (e.g. Zalando) require `sslMode: require`.
 
 The operator will generate an Ed25519 keypair, build a Keyline config, create a PVC, and deploy the server. Once ready, `status.conditions[Ready]` becomes `True` and `status.url` is populated.
 
