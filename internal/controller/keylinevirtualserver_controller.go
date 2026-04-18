@@ -6,7 +6,6 @@ import (
 	"context"
 
 	keylineclient "github.com/The127/Keyline/client"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -53,23 +52,10 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 		return r.setNotReady(ctx, &vs, "InstanceNotReady", "KeylineInstance is not ready")
 	}
 
-	var secret corev1.Secret
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: vs.Namespace,
-		Name:      instance.Name + credentialsSecret,
-	}, &secret); err != nil {
+	kc, err := newOperatorClient(ctx, r.Client, vs.Namespace, &instance, vs.Spec.Name)
+	if err != nil {
 		return r.setNotReady(ctx, &vs, "SecretNotFound", err.Error())
 	}
-
-	ts := &keylineclient.ServiceUserTokenSource{
-		KeylineURL:    instance.Status.URL,
-		VirtualServer: instance.Spec.VirtualServer,
-		PrivKeyPEM:    string(secret.Data["private-key"]),
-		Kid:           string(secret.Data["key-id"]),
-		Username:      string(secret.Data["username"]),
-		Application:   operatorApplication,
-	}
-	kc := keylineclient.NewClient(instance.Status.URL, vs.Spec.Name, keylineclient.WithOidc(ts))
 
 	current, err := kc.VirtualServer().Get(ctx)
 	if err != nil {

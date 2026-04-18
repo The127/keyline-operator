@@ -23,7 +23,6 @@ import (
 
 	keylineapi "github.com/The127/Keyline/api"
 	keylineclient "github.com/The127/Keyline/client"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -79,25 +78,12 @@ func (r *KeylineProjectReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.setNotReady(ctx, &proj, "InstanceNotFound", err.Error())
 	}
 
-	var secret corev1.Secret
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: proj.Namespace,
-		Name:      instance.Name + credentialsSecret,
-	}, &secret); err != nil {
+	kc, err := newOperatorClient(ctx, r.Client, proj.Namespace, &instance, vs.Spec.Name)
+	if err != nil {
 		return r.setNotReady(ctx, &proj, "SecretNotFound", err.Error())
 	}
 
-	ts := &keylineclient.ServiceUserTokenSource{
-		KeylineURL:    instance.Status.URL,
-		VirtualServer: instance.Spec.VirtualServer,
-		PrivKeyPEM:    string(secret.Data["private-key"]),
-		Kid:           string(secret.Data["key-id"]),
-		Username:      string(secret.Data["username"]),
-		Application:   operatorApplication,
-	}
-	kc := keylineclient.NewClient(instance.Status.URL, vs.Spec.Name, keylineclient.WithOidc(ts))
-
-	_, err := kc.Project().Get(ctx, proj.Spec.Slug)
+	_, err = kc.Project().Get(ctx, proj.Spec.Slug)
 	if err != nil {
 		var apiErr keylineclient.ApiError
 		if errors.As(err, &apiErr) && apiErr.Code == http.StatusNotFound {
