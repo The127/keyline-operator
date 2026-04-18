@@ -1,135 +1,222 @@
 # keyline-operator
-// TODO(user): Add simple overview of use/purpose
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+A Kubernetes operator for [Keyline](https://github.com/The127/Keyline) — a self-hosted OIDC/IDP server. Declare a `KeylineInstance` and the operator deploys and manages a Keyline server; additional CRDs let you configure virtual servers, projects, applications, roles, users, and role assignments entirely through Kubernetes resources.
 
-## Getting Started
+## Custom Resources
+
+| Resource | Purpose |
+|---|---|
+| `KeylineInstance` | Deploys a Keyline server and owns all other resources |
+| `KeylineVirtualServer` | Configures a virtual server (tenant) on the instance |
+| `KeylineProject` | Creates a project within a virtual server |
+| `KeylineApplication` | Registers an OAuth2/OIDC application in a project |
+| `KeylineRole` | Defines a role in a project |
+| `KeylineUser` | Creates a user on a virtual server |
+| `KeylineRoleAssignment` | Assigns a user to a role |
+
+## Installation
 
 ### Prerequisites
-- go version v1.23.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+- Kubernetes v1.25+
+- kubectl
+- Helm v3
 
-```sh
-make docker-build docker-push IMG=<some-registry>/keyline-operator:tag
-```
-
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
-
-**Install the CRDs into the cluster:**
+### Install with Helm
 
 ```sh
-make install
+helm install keyline-operator ./charts/keyline-operator \
+  --namespace keyline-operator-system \
+  --create-namespace \
+  --set image.tag=<version>
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+Verify the operator is running:
 
 ```sh
-make deploy IMG=<some-registry>/keyline-operator:tag
+kubectl get pods -n keyline-operator-system
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+### Helm values
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+| Value | Default | Description |
+|---|---|---|
+| `image.repository` | `ghcr.io/the127/keyline-operator` | Container image repository |
+| `image.tag` | chart `appVersion` | Image tag |
+| `image.pullPolicy` | `IfNotPresent` | Image pull policy |
+| `replicaCount` | `1` | Number of operator replicas |
+| `resources` | see values.yaml | Container resource requests/limits |
+| `leaderElection.enabled` | `true` | Enable leader election (required for multiple replicas) |
+| `metrics.enabled` | `true` | Expose Prometheus metrics |
+| `metrics.port` | `8443` | Metrics server port |
+| `metrics.secure` | `true` | Serve metrics over HTTPS |
+| `serviceAccount.create` | `true` | Create a ServiceAccount |
+| `serviceAccount.name` | `""` | Override ServiceAccount name |
+
+### Uninstall
 
 ```sh
-kubectl apply -k config/samples/
+helm uninstall keyline-operator -n keyline-operator-system
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+> **Note:** CRDs are not deleted on uninstall. Remove them manually if needed:
+> ```sh
+> kubectl delete crds -l app.kubernetes.io/name=keyline-operator
+> ```
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+## Usage
+
+### 1. Deploy a Keyline instance
+
+First create a Secret with your PostgreSQL credentials:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pg-credentials
+  namespace: default
+stringData:
+  username: keyline
+  password: s3cr3t
+```
+
+Then declare a `KeylineInstance`:
+
+```yaml
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineInstance
+metadata:
+  name: keyline
+  namespace: default
+spec:
+  image: ghcr.io/the127/keyline:v1.2.3
+  externalUrl: https://keyline.example.com
+  frontendExternalUrl: https://app.example.com
+  database:
+    mode: postgres
+    postgres:
+      host: postgres.default.svc
+      database: keyline
+      sslMode: disable
+      credentialsSecretRef:
+        name: pg-credentials
+  keyStore:
+    mode: directory
+    directory:
+      storageSize: 1Gi
+```
+
+The operator will generate an Ed25519 keypair, build a Keyline config, create a PVC, and deploy the server. Once ready, `status.conditions[Ready]` becomes `True` and `status.url` is populated.
 
 ```sh
-kubectl delete -k config/samples/
+kubectl get keylineinstance keyline
+# NAME      IMAGE                            URL                                              READY   AGE
+# keyline   ghcr.io/the127/keyline:v1.2.3   http://keyline.default.svc.cluster.local         True    2m
 ```
 
-**Delete the APIs(CRDs) from the cluster:**
+### 2. Configure a virtual server
+
+```yaml
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineVirtualServer
+metadata:
+  name: main
+  namespace: default
+spec:
+  instanceRef:
+    name: keyline
+  name: main
+  displayName: Main
+  registrationEnabled: false
+  require2fa: false
+```
+
+### 3. Create a project
+
+```yaml
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineProject
+metadata:
+  name: my-app
+  namespace: default
+spec:
+  virtualServerRef:
+    name: main
+  slug: my-app
+  name: My App
+```
+
+### 4. Register an application
+
+```yaml
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineApplication
+metadata:
+  name: my-app-web
+  namespace: default
+spec:
+  projectRef:
+    name: my-app
+  name: my-app-web
+  displayName: My App (Web)
+  type: public
+  redirectUris:
+    - https://app.example.com/callback
+  postLogoutUris:
+    - https://app.example.com
+```
+
+### 5. Create users and roles
+
+```yaml
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineUser
+metadata:
+  name: alice
+  namespace: default
+spec:
+  virtualServerRef:
+    name: main
+  username: alice
+  displayName: Alice
+
+---
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineRole
+metadata:
+  name: admin
+  namespace: default
+spec:
+  projectRef:
+    name: my-app
+  name: admin
+
+---
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineRoleAssignment
+metadata:
+  name: alice-admin
+  namespace: default
+spec:
+  userRef:
+    name: alice
+  roleRef:
+    name: admin
+```
+
+## Development
 
 ```sh
-make uninstall
+make generate    # regenerate DeepCopy methods after CRD type changes
+make manifests   # regenerate CRD YAML from Go types
+make install     # apply CRDs to current cluster
+make run         # run controller locally against current kubeconfig
+make test        # run unit test suite
+make test-e2e    # run e2e tests against minikube
+make lint        # run golangci-lint
 ```
-
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
-
-## Project Distribution
-
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/keyline-operator:tag
-```
-
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
-
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/keyline-operator/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v1-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
 
 ## License
 
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+Copyright 2026. Licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
