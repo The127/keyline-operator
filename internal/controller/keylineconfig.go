@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	keylineconfig "github.com/The127/Keyline/config"
 	keylinev1alpha1 "github.com/keyline/keyline-operator/api/v1alpha1"
 	"gopkg.in/yaml.v3"
 )
@@ -16,99 +17,6 @@ const (
 	keylinePort         = 8080
 )
 
-type keylineConfigYAML struct {
-	Server               keylineServerCfg               `yaml:"server"`
-	Frontend             keylineFrontendCfg             `yaml:"frontend"`
-	Database             keylineDatabaseCfg             `yaml:"database"`
-	InitialVirtualServer keylineInitialVirtualServerCfg `yaml:"initialVirtualServer"`
-	KeyStore             keylineKeyStoreCfg             `yaml:"keyStore"`
-	Cache                keylineCacheCfg                `yaml:"cache"`
-	LeaderElection       keylineLeaderElectionCfg       `yaml:"leaderElection"`
-}
-
-type keylineServerCfg struct {
-	Host           string   `yaml:"host"`
-	Port           int      `yaml:"port"`
-	ExternalURL    string   `yaml:"externalUrl"`
-	AllowedOrigins []string `yaml:"allowedOrigins"`
-}
-
-type keylineFrontendCfg struct {
-	ExternalURL string `yaml:"externalUrl"`
-}
-
-type keylineDatabaseCfg struct {
-	Mode     string             `yaml:"mode"`
-	Postgres keylinePostgresCfg `yaml:"postgres"`
-}
-
-type keylinePostgresCfg struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Database string `yaml:"database"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-	SslMode  string `yaml:"sslMode"`
-}
-
-type keylineInitialVirtualServerCfg struct {
-	Name                  string                  `yaml:"name"`
-	EnableRegistration    bool                    `yaml:"enableRegistration"`
-	SigningAlgorithm      string                  `yaml:"signingAlgorithm"`
-	CreateSystemAdminRole bool                    `yaml:"createSystemAdminRole"`
-	CreateAdmin           bool                    `yaml:"createAdmin"`
-	ServiceUsers          []keylineServiceUserCfg `yaml:"serviceUsers"`
-	Projects              []keylineInitialProject `yaml:"projects"`
-}
-
-type keylineServiceUserCfg struct {
-	Username  string              `yaml:"username"`
-	Roles     []string            `yaml:"roles"`
-	PublicKey keylinePublicKeyCfg `yaml:"publicKey"`
-}
-
-type keylinePublicKeyCfg struct {
-	Pem string `yaml:"pem"`
-	Kid string `yaml:"kid"`
-}
-
-type keylineInitialProject struct {
-	Slug         string                 `yaml:"slug"`
-	Name         string                 `yaml:"name"`
-	Applications []keylineInitialAppCfg `yaml:"applications"`
-}
-
-type keylineInitialAppCfg struct {
-	Name        string `yaml:"name"`
-	DisplayName string `yaml:"displayName"`
-	Type        string `yaml:"type"`
-}
-
-type keylineKeyStoreCfg struct {
-	Mode      string                   `yaml:"mode"`
-	Directory *keylineKeyStoreDirCfg   `yaml:"directory,omitempty"`
-	Vault     *keylineKeyStoreVaultCfg `yaml:"vault,omitempty"`
-}
-
-type keylineKeyStoreDirCfg struct {
-	Path string `yaml:"path"`
-}
-
-type keylineKeyStoreVaultCfg struct {
-	Address string `yaml:"address"`
-	Token   string `yaml:"token"`
-	Mount   string `yaml:"mount"`
-	Prefix  string `yaml:"prefix,omitempty"`
-}
-
-type keylineCacheCfg struct {
-	Mode string `yaml:"mode"`
-}
-
-type keylineLeaderElectionCfg struct {
-	Mode string `yaml:"mode"`
-}
-
 func buildKeylineConfig(
 	instance *keylinev1alpha1.KeylineInstance,
 	pubKeyPEM, kid, dbUser, dbPass, vaultToken string,
@@ -118,10 +26,10 @@ func buildKeylineConfig(
 		vs = "keyline"
 	}
 
-	var dbCfg keylineDatabaseCfg
+	var dbCfg keylineconfig.DatabaseConfig
 	switch instance.Spec.Database.Mode {
 	case "memory":
-		dbCfg = keylineDatabaseCfg{Mode: "memory"}
+		dbCfg = keylineconfig.DatabaseConfig{Mode: keylineconfig.DatabaseModeMemory}
 	default:
 		pg := instance.Spec.Database.Postgres
 		pgPort := int(pg.Port)
@@ -136,9 +44,9 @@ func buildKeylineConfig(
 		if sslMode == "" {
 			sslMode = "enable"
 		}
-		dbCfg = keylineDatabaseCfg{
-			Mode: "postgres",
-			Postgres: keylinePostgresCfg{
+		dbCfg = keylineconfig.DatabaseConfig{
+			Mode: keylineconfig.DatabaseModePostgres,
+			Postgres: keylineconfig.PostgresConfig{
 				Host:     pg.Host,
 				Port:     pgPort,
 				Database: dbName,
@@ -149,38 +57,51 @@ func buildKeylineConfig(
 		}
 	}
 
-	cfg := keylineConfigYAML{
-		Server: keylineServerCfg{
+	cfg := keylineconfig.Config{
+		Server: keylineconfig.ServerConfig{
 			Host:           "0.0.0.0",
 			Port:           keylinePort,
-			ExternalURL:    instance.Spec.ExternalUrl,
+			ExternalUrl:    instance.Spec.ExternalUrl,
 			AllowedOrigins: []string{instance.Spec.ExternalUrl, instance.Spec.FrontendExternalUrl},
 		},
-		Frontend: keylineFrontendCfg{
-			ExternalURL: instance.Spec.FrontendExternalUrl,
+		Frontend: struct {
+			ExternalUrl string `yaml:"externalUrl"`
+		}{
+			ExternalUrl: instance.Spec.FrontendExternalUrl,
 		},
 		Database: dbCfg,
-		InitialVirtualServer: keylineInitialVirtualServerCfg{
+		InitialVirtualServer: keylineconfig.InitialVirtualServerConfig{
 			Name:                  vs,
 			EnableRegistration:    false,
-			SigningAlgorithm:      "EdDSA",
+			SigningAlgorithm:      keylineconfig.SigningAlgorithmEdDSA,
 			CreateSystemAdminRole: true,
 			CreateAdmin:           false,
-			ServiceUsers: []keylineServiceUserCfg{
+			ServiceUsers: []keylineconfig.ServiceUserConfig{
 				{
 					Username: operatorUsername,
 					Roles:    []string{"system:admin", "system:system-admin"},
-					PublicKey: keylinePublicKeyCfg{
+					PublicKey: struct {
+						Pem string `yaml:"pem"`
+						Kid string `yaml:"kid"`
+					}{
 						Pem: pubKeyPEM,
 						Kid: kid,
 					},
 				},
 			},
-			Projects: []keylineInitialProject{
+			Projects: []keylineconfig.InitialProjectConfig{
 				{
 					Slug: "operator",
 					Name: "Operator",
-					Applications: []keylineInitialAppCfg{
+					Applications: []struct {
+						Name                   string   `yaml:"name"`
+						DisplayName            string   `yaml:"displayName"`
+						Type                   string   `yaml:"type"`
+						HashedSecret           *string  `yaml:"hashedSecret,omitempty"`
+						RedirectUris           []string `yaml:"redirectUris"`
+						PostLogoutRedirectUris []string `yaml:"postLogoutRedirectUris"`
+						DeviceFlowEnabled      bool     `yaml:"deviceFlowEnabled"`
+					}{
 						{
 							Name:        operatorApplication,
 							DisplayName: "Keyline Operator",
@@ -190,21 +111,36 @@ func buildKeylineConfig(
 				},
 			},
 		},
-		Cache:          keylineCacheCfg{Mode: "memory"},
-		LeaderElection: keylineLeaderElectionCfg{Mode: "none"},
+		Cache: struct {
+			Mode  keylineconfig.CacheMode `yaml:"mode"`
+			Redis struct {
+				Host     string `yaml:"host"`
+				Port     int    `yaml:"port"`
+				Username string `yaml:"username"`
+				Password string `yaml:"password"`
+				Database int    `yaml:"database"`
+			} `yaml:"redis"`
+		}{
+			Mode: keylineconfig.CacheModeMemory,
+		},
+		LeaderElection: keylineconfig.LeaderElectionConfig{
+			Mode: keylineconfig.LeaderElectionModeNone,
+		},
 	}
 
 	switch instance.Spec.KeyStore.Mode {
 	case "directory":
-		cfg.KeyStore = keylineKeyStoreCfg{
-			Mode:      "directory",
-			Directory: &keylineKeyStoreDirCfg{Path: keyDirPath},
+		cfg.KeyStore = keylineconfig.KeyStoreConfig{
+			Mode: keylineconfig.KeyStoreModeDirectory,
+			Directory: struct {
+				Path string `yaml:"path"`
+			}{Path: keyDirPath},
 		}
 	case "vault":
 		v := instance.Spec.KeyStore.Vault
-		cfg.KeyStore = keylineKeyStoreCfg{
-			Mode: "vault",
-			Vault: &keylineKeyStoreVaultCfg{
+		cfg.KeyStore = keylineconfig.KeyStoreConfig{
+			Mode: keylineconfig.KeyStoreModeVault,
+			Vault: keylineconfig.VaultKeyStoreConfig{
 				Address: v.Address,
 				Token:   vaultToken,
 				Mount:   v.Mount,
