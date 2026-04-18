@@ -1,57 +1,65 @@
-/*
-Copyright 2026.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Copyright 2026. Licensed under the Apache License, Version 2.0.
 
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// KeylineApplicationSpec defines the desired state of KeylineApplication
+// KeylineApplicationSpec defines the desired state of KeylineApplication.
 type KeylineApplicationSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// ProjectRef references the KeylineProject this application belongs to.
+	// +kubebuilder:validation:Required
+	ProjectRef corev1.LocalObjectReference `json:"projectRef"`
 
-	// foo is an example field of KeylineApplication. Edit keylineapplication_types.go to remove/update
+	// Name is the unique application identifier in Keyline.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	Name string `json:"name"`
+
+	// DisplayName is the human-readable label shown in the Keyline UI.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	DisplayName string `json:"displayName"`
+
+	// Type is the application type.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=public;confidential
+	Type string `json:"type"`
+
+	// RedirectUris is the list of allowed OAuth2 redirect URIs.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	RedirectUris []string `json:"redirectUris"`
+
+	// PostLogoutUris is the list of allowed post-logout redirect URIs.
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	PostLogoutUris []string `json:"postLogoutUris,omitempty"`
+
+	// AccessTokenHeaderType controls the JWT header type.
+	// +optional
+	// +kubebuilder:validation:Enum=at+jwt;JWT
+	AccessTokenHeaderType *string `json:"accessTokenHeaderType,omitempty"`
+
+	// DeviceFlowEnabled enables the device authorization flow.
+	// +optional
+	DeviceFlowEnabled bool `json:"deviceFlowEnabled,omitempty"`
+
+	// ClaimsMappingScript is an optional custom claims mapping script.
+	// +optional
+	ClaimsMappingScript *string `json:"claimsMappingScript,omitempty"`
 }
 
 // KeylineApplicationStatus defines the observed state of KeylineApplication.
 type KeylineApplicationStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+	// ApplicationId is the UUID of the application in Keyline.
+	// +optional
+	ApplicationId string `json:"applicationId,omitempty"`
 
 	// conditions represent the current state of the KeylineApplication resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
 	// +listType=map
 	// +listMapKey=type
 	// +optional

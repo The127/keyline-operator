@@ -40,25 +40,79 @@ spec:
           spec:
             description: spec defines the desired state of KeylineApplication
             properties:
-              foo:
-                description: foo is an example field of KeylineApplication. Edit keylineapplication_types.go
-                  to remove/update
+              accessTokenHeaderType:
+                description: AccessTokenHeaderType controls the JWT header type.
+                enum:
+                - at+jwt
+                - JWT
                 type: string
+              claimsMappingScript:
+                description: ClaimsMappingScript is an optional custom claims mapping
+                  script.
+                type: string
+              deviceFlowEnabled:
+                description: DeviceFlowEnabled enables the device authorization flow.
+                type: boolean
+              displayName:
+                description: DisplayName is the human-readable label shown in the
+                  Keyline UI.
+                maxLength: 255
+                minLength: 1
+                type: string
+              name:
+                description: Name is the unique application identifier in Keyline.
+                maxLength: 255
+                minLength: 1
+                type: string
+              postLogoutUris:
+                description: PostLogoutUris is the list of allowed post-logout redirect
+                  URIs.
+                items:
+                  type: string
+                type: array
+              projectRef:
+                description: ProjectRef references the KeylineProject this application
+                  belongs to.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              redirectUris:
+                description: RedirectUris is the list of allowed OAuth2 redirect URIs.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+              type:
+                description: Type is the application type.
+                enum:
+                - public
+                - confidential
+                type: string
+            required:
+            - displayName
+            - name
+            - projectRef
+            - redirectUris
+            - type
             type: object
           status:
             description: status defines the observed state of KeylineApplication
             properties:
+              applicationId:
+                description: ApplicationId is the UUID of the application in Keyline.
+                type: string
               conditions:
-                description: |-
-                  conditions represent the current state of the KeylineApplication resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
+                description: conditions represent the current state of the KeylineApplication
+                  resource.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
