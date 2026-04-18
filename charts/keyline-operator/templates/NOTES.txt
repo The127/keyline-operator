@@ -1,0 +1,10 @@
+Keyline Operator has been installed in namespace {{ .Release.Namespace }}.
+
+Verify the operator is running:
+  kubectl get pods -n {{ .Release.Namespace }}
+
+To deploy a Keyline instance, create a KeylineInstance resource:
+  kubectl apply -f your-keylineinstance.yaml
+
+CRDs installed:
+  kubectl get crds | grep keyline.keyline.dev

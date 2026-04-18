@@ -1,0 +1,29 @@
+image:
+  repository: ghcr.io/the127/keyline-operator
+  pullPolicy: IfNotPresent
+  tag: ""
+
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+leaderElection:
+  enabled: true
+
+metrics:
+  enabled: true
+  port: 8443
+  secure: true

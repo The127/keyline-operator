@@ -1,0 +1,13 @@
+apiVersion: v2
+name: keyline-operator
+description: Kubernetes operator for managing Keyline OIDC/IDP servers
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - keyline
+  - oidc
+  - idp
+  - operator
+sources:
+  - https://github.com/keyline/keyline-operator
