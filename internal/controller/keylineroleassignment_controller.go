@@ -126,15 +126,19 @@ func (r *KeylineRoleAssignmentReconciler) Reconcile(ctx context.Context, req ctr
 		return r.setNotReady(ctx, &assignment, "ListFailed", err.Error())
 	}
 
+	assigned := false
 	for _, u := range page.Items {
 		if u.Id == userId {
-			return setReadyCondition(ctx, r.Client, &assignment, &assignment.Status.Conditions, "Synced", "Role assignment synced")
+			assigned = true
+			break
 		}
 	}
 
-	if err := rc.Assign(ctx, roleId, userId); err != nil {
-		log.Error(err, "failed to assign role")
-		return r.setNotReady(ctx, &assignment, "AssignFailed", err.Error())
+	if !assigned {
+		if err := rc.Assign(ctx, roleId, userId); err != nil {
+			log.Error(err, "failed to assign role")
+			return r.setNotReady(ctx, &assignment, "AssignFailed", err.Error())
+		}
 	}
 
 	return setReadyCondition(ctx, r.Client, &assignment, &assignment.Status.Conditions, "Synced", "Role assignment synced")
