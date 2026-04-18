@@ -98,7 +98,7 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return r.setNotReady(ctx, &instance, "ConfigSecretError", err.Error())
 	}
 
-	if instance.Spec.KeyStore.Mode == "directory" {
+	if instance.Spec.KeyStore.Mode == keyStoreModeDirectory {
 		if err := r.ensurePVC(ctx, &instance); err != nil {
 			return r.setNotReady(ctx, &instance, "PVCError", err.Error())
 		}
@@ -127,7 +127,7 @@ func (r *KeylineInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	vs := instance.Spec.VirtualServer
 	if vs == "" {
-		vs = "keyline"
+		vs = defaultVirtualServer
 	}
 	ts := &keylineclient.ServiceUserTokenSource{
 		KeylineURL:    svcURL,
@@ -321,7 +321,7 @@ func (r *KeylineInstanceReconciler) ensureDeployment(ctx context.Context, instan
 				ReadOnly:  true,
 			},
 		}
-		if instance.Spec.KeyStore.Mode == "directory" {
+		if instance.Spec.KeyStore.Mode == keyStoreModeDirectory {
 			volumes = append(volumes, corev1.Volume{
 				Name: "keys",
 				VolumeSource: corev1.VolumeSource{
@@ -346,7 +346,7 @@ func (r *KeylineInstanceReconciler) ensureDeployment(ctx context.Context, instan
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:    "keyline",
+							Name:    keylineAppName,
 							Image:   instance.Spec.Image,
 							Command: []string{"/app/api"},
 							Args:    []string{"--config", configFilePath, "--environment", "PRODUCTION"},
@@ -411,7 +411,7 @@ func (r *KeylineInstanceReconciler) setReady(ctx context.Context, instance *keyl
 
 func instanceLabels(instance *keylinev1alpha1.KeylineInstance) map[string]string {
 	return map[string]string{
-		"app.kubernetes.io/name":       "keyline",
+		"app.kubernetes.io/name":       keylineAppName,
 		"app.kubernetes.io/instance":   instance.Name,
 		"app.kubernetes.io/managed-by": "keyline-operator",
 	}

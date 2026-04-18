@@ -10,11 +10,15 @@ import (
 )
 
 const (
-	operatorUsername    = "keyline-operator"
-	operatorApplication = "keyline-operator"
-	keyDirPath          = "/keys"
-	configFilePath      = "/etc/keyline/config.yaml"
-	keylinePort         = 8080
+	operatorUsername      = "keyline-operator"
+	operatorApplication   = "keyline-operator"
+	keyDirPath            = "/keys"
+	configFilePath        = "/etc/keyline/config.yaml"
+	keylinePort           = 8080
+	defaultVirtualServer  = "keyline"
+	defaultDatabaseName   = "keyline"
+	keylineAppName        = "keyline"
+	keyStoreModeDirectory = "directory"
 )
 
 func buildKeylineConfig(
@@ -23,7 +27,7 @@ func buildKeylineConfig(
 ) (data []byte, hash string, err error) {
 	vs := instance.Spec.VirtualServer
 	if vs == "" {
-		vs = "keyline"
+		vs = defaultVirtualServer
 	}
 
 	var dbCfg keylineconfig.DatabaseConfig
@@ -38,7 +42,7 @@ func buildKeylineConfig(
 		}
 		dbName := pg.Database
 		if dbName == "" {
-			dbName = "keyline"
+			dbName = defaultDatabaseName
 		}
 		sslMode := pg.SslMode
 		if sslMode == "" {
@@ -129,7 +133,7 @@ func buildKeylineConfig(
 	}
 
 	switch instance.Spec.KeyStore.Mode {
-	case "directory":
+	case keyStoreModeDirectory:
 		cfg.KeyStore = keylineconfig.KeyStoreConfig{
 			Mode: keylineconfig.KeyStoreModeDirectory,
 			Directory: struct {
