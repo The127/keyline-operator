@@ -189,6 +189,85 @@ spec:
 		Expect(appId).NotTo(BeEmpty(), "status.applicationId should be set after sync")
 	})
 
+	It("should update redirect URIs and display name on spec change", func() {
+		const appName = "test-app-update"
+
+		By("creating the KeylineApplication")
+		initialManifest := fmt.Sprintf(`
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineApplication
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  projectRef:
+    name: %s
+  name: test-application-update
+  displayName: Initial Display Name
+  type: public
+  redirectUris:
+    - http://localhost:8080/callback
+`, appName, testNamespace, projName)
+
+		cmd := exec.Command("kubectl", "apply", "-f", "-")
+		cmd.Stdin = strings.NewReader(initialManifest)
+		_, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to create KeylineApplication")
+
+		DeferCleanup(func() {
+			cmd := exec.Command("kubectl", "delete", "keylineapplication", appName,
+				"-n", testNamespace, "--ignore-not-found=true")
+			_, _ = utils.Run(cmd)
+		})
+
+		By("waiting for initial Ready=True")
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get",
+				fmt.Sprintf("keylineapplication/%s", appName),
+				"-n", testNamespace,
+				"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`,
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(output).To(Equal("True"))
+		}).Should(Succeed(), "KeylineApplication did not become Ready after create")
+
+		By("updating displayName and redirectUris")
+		updatedManifest := fmt.Sprintf(`
+apiVersion: keyline.keyline.dev/v1alpha1
+kind: KeylineApplication
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  projectRef:
+    name: %s
+  name: test-application-update
+  displayName: Updated Display Name
+  type: public
+  redirectUris:
+    - http://localhost:8080/callback
+    - http://localhost:9090/callback
+`, appName, testNamespace, projName)
+
+		cmd = exec.Command("kubectl", "apply", "-f", "-")
+		cmd.Stdin = strings.NewReader(updatedManifest)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to update KeylineApplication")
+
+		By("waiting for Ready=True after update")
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get",
+				fmt.Sprintf("keylineapplication/%s", appName),
+				"-n", testNamespace,
+				"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`,
+			)
+			output, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(output).To(Equal("True"))
+		}).Should(Succeed(), "KeylineApplication did not remain Ready after update")
+	})
+
 	It("should set Ready=False with reason ProjectNotFound when project does not exist", func() {
 		const appName = "test-app-no-proj"
 

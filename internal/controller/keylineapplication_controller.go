@@ -4,6 +4,7 @@ package controller
 
 import (
 	"context"
+	"slices"
 
 	keylineapi "github.com/The127/Keyline/api"
 	keylineclient "github.com/The127/Keyline/client"
@@ -84,6 +85,22 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	ac := kc.Project().Application(proj.Spec.Slug)
 
+	// If no ID in status, search by name to recover after status loss
+	if app.Status.ApplicationId == "" {
+		page, err := ac.List(ctx, keylineclient.ListApplicationParams{Page: 0, Size: 1000})
+		if err != nil {
+			log.Error(err, "failed to list applications")
+			return sp.setNotReady(ctx, "ListFailed", err.Error())
+		}
+		for _, item := range page.Items {
+			if item.Name == app.Spec.Name {
+				app.Status.ApplicationId = item.Id.String()
+				break
+			}
+		}
+	}
+
+	// If we have an ID, try to sync (get + patch)
 	if app.Status.ApplicationId != "" {
 		id, parseErr := uuid.Parse(app.Status.ApplicationId)
 		if parseErr == nil {
@@ -107,6 +124,22 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 					patch.ClaimsMappingScript = app.Spec.ClaimsMappingScript
 					needsPatch = true
 				}
+				if !slices.Equal(existing.RedirectUris, app.Spec.RedirectUris) {
+					patch.RedirectUris = app.Spec.RedirectUris
+					needsPatch = true
+				}
+				if !slices.Equal(existing.PostLogoutRedirectUris, app.Spec.PostLogoutUris) {
+					patch.PostLogoutUris = app.Spec.PostLogoutUris
+					needsPatch = true
+				}
+				desiredATHT := ""
+				if app.Spec.AccessTokenHeaderType != nil {
+					desiredATHT = *app.Spec.AccessTokenHeaderType
+				}
+				if desiredATHT != "" && existing.AccessTokenHeaderType != desiredATHT {
+					patch.AccessTokenHeaderType = app.Spec.AccessTokenHeaderType
+					needsPatch = true
+				}
 				if needsPatch {
 					if patchErr := ac.Patch(ctx, id, patch); patchErr != nil {
 						log.Error(patchErr, "failed to patch application")
@@ -115,40 +148,25 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 				}
 				return sp.setReady(ctx, "Synced", "Application synced")
 			}
-			// 404 — fall through to find or create
+			// 404 — fall through to create
 			app.Status.ApplicationId = ""
 		}
 	}
 
-	// find by name in case the status was lost
-	page, err := ac.List(ctx, keylineclient.ListApplicationParams{Page: 0, Size: 1000})
-	if err != nil {
-		log.Error(err, "failed to list applications")
-		return sp.setNotReady(ctx, "ListFailed", err.Error())
+	resp, createErr := ac.Create(ctx, keylineapi.CreateApplicationRequestDto{
+		Name:                  app.Spec.Name,
+		DisplayName:           app.Spec.DisplayName,
+		Type:                  app.Spec.Type,
+		RedirectUris:          app.Spec.RedirectUris,
+		PostLogoutUris:        app.Spec.PostLogoutUris,
+		AccessTokenHeaderType: app.Spec.AccessTokenHeaderType,
+		DeviceFlowEnabled:     app.Spec.DeviceFlowEnabled,
+	})
+	if createErr != nil {
+		log.Error(createErr, "failed to create application")
+		return sp.setNotReady(ctx, "CreateFailed", createErr.Error())
 	}
-	for _, item := range page.Items {
-		if item.Name == app.Spec.Name {
-			app.Status.ApplicationId = item.Id.String()
-			break
-		}
-	}
-
-	if app.Status.ApplicationId == "" {
-		resp, createErr := ac.Create(ctx, keylineapi.CreateApplicationRequestDto{
-			Name:                  app.Spec.Name,
-			DisplayName:           app.Spec.DisplayName,
-			Type:                  app.Spec.Type,
-			RedirectUris:          app.Spec.RedirectUris,
-			PostLogoutUris:        app.Spec.PostLogoutUris,
-			AccessTokenHeaderType: app.Spec.AccessTokenHeaderType,
-			DeviceFlowEnabled:     app.Spec.DeviceFlowEnabled,
-		})
-		if createErr != nil {
-			log.Error(createErr, "failed to create application")
-			return sp.setNotReady(ctx, "CreateFailed", createErr.Error())
-		}
-		app.Status.ApplicationId = resp.Id.String()
-	}
+	app.Status.ApplicationId = resp.Id.String()
 
 	return sp.setReady(ctx, "Synced", "Application synced")
 }
