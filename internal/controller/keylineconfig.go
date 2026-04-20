@@ -75,11 +75,11 @@ func buildKeylineConfig(
 		},
 		Database: dbCfg,
 		InitialVirtualServer: keylineconfig.InitialVirtualServerConfig{
-			Name:                  vs,
-			EnableRegistration:    false,
-			SigningAlgorithm:      keylineconfig.SigningAlgorithmEdDSA,
-			CreateSystemAdminRole: true,
-			CreateAdmin:           false,
+			Name:                    vs,
+			EnableRegistration:      false,
+			PrimarySigningAlgorithm: keylineconfig.SigningAlgorithmEdDSA,
+			CreateSystemAdminRole:   true,
+			CreateAdmin:             false,
 			ServiceUsers: []keylineconfig.ServiceUserConfig{
 				{
 					Username: operatorUsername,

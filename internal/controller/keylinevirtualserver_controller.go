@@ -4,6 +4,7 @@ package controller
 
 import (
 	"context"
+	"slices"
 
 	keylineclient "github.com/The127/Keyline/client"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -80,6 +81,14 @@ func (r *KeylineVirtualServerReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 	if vs.Spec.RequireEmailVerification != nil && *vs.Spec.RequireEmailVerification != current.RequireEmailVerification {
 		patch.RequireEmailVerification = vs.Spec.RequireEmailVerification
+		needsPatch = true
+	}
+	if vs.Spec.PrimarySigningAlgorithm != nil && *vs.Spec.PrimarySigningAlgorithm != current.PrimarySigningAlgorithm {
+		patch.PrimarySigningAlgorithm = vs.Spec.PrimarySigningAlgorithm
+		needsPatch = true
+	}
+	if vs.Spec.AdditionalSigningAlgorithms != nil && !slices.Equal(vs.Spec.AdditionalSigningAlgorithms, current.AdditionalSigningAlgorithms) {
+		patch.AdditionalSigningAlgorithms = &vs.Spec.AdditionalSigningAlgorithms
 		needsPatch = true
 	}
 

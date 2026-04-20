@@ -40,6 +40,15 @@ spec:
           spec:
             description: spec defines the desired state of KeylineVirtualServer
             properties:
+              additionalSigningAlgorithms:
+                description: AdditionalSigningAlgorithms lists additional JWT signing
+                  algorithms supported by this virtual server.
+                items:
+                  enum:
+                  - RS256
+                  - EdDSA
+                  type: string
+                type: array
               displayName:
                 description: DisplayName is the human-readable label shown in the
                   Keyline UI.
@@ -65,6 +74,13 @@ spec:
                 maxLength: 255
                 minLength: 1
                 pattern: ^[a-zA-Z0-9]+$
+                type: string
+              primarySigningAlgorithm:
+                description: PrimarySigningAlgorithm is the primary JWT signing algorithm
+                  for this virtual server.
+                enum:
+                - RS256
+                - EdDSA
                 type: string
               registrationEnabled:
                 description: RegistrationEnabled controls whether user self-registration

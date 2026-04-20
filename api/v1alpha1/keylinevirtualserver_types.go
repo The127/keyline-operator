@@ -49,6 +49,16 @@ type KeylineVirtualServerSpec struct {
 	// RequireEmailVerification controls whether email verification is required.
 	// +optional
 	RequireEmailVerification *bool `json:"requireEmailVerification,omitempty"`
+
+	// PrimarySigningAlgorithm is the primary JWT signing algorithm for this virtual server.
+	// +optional
+	// +kubebuilder:validation:Enum=RS256;EdDSA
+	PrimarySigningAlgorithm *string `json:"primarySigningAlgorithm,omitempty"`
+
+	// AdditionalSigningAlgorithms lists additional JWT signing algorithms supported by this virtual server.
+	// +optional
+	// +kubebuilder:validation:items:Enum=RS256;EdDSA
+	AdditionalSigningAlgorithms []string `json:"additionalSigningAlgorithms,omitempty"`
 }
 
 // KeylineVirtualServerStatus defines the observed state of KeylineVirtualServer.

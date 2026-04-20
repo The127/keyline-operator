@@ -135,6 +135,8 @@ spec:
   displayName: Main
   registrationEnabled: false
   require2fa: false
+  primarySigningAlgorithm: EdDSA        # RS256 or EdDSA (default: EdDSA)
+  additionalSigningAlgorithms: []       # optional extra algorithms
 ```
 
 ### 3. Create a project
@@ -170,6 +172,7 @@ spec:
     - https://app.example.com/callback
   postLogoutUris:
     - https://app.example.com
+  signingAlgorithm: EdDSA              # optional per-app override (RS256 or EdDSA)
 ```
 
 ### 5. Create users and roles

@@ -110,38 +110,9 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 				return sp.setNotReady(ctx, "GetFailed", getErr.Error())
 			}
 			if getErr == nil {
-				patch := keylineapi.PatchApplicationRequestDto{}
-				needsPatch := false
-				if existing.DisplayName != app.Spec.DisplayName {
-					patch.DisplayName = &app.Spec.DisplayName
-					needsPatch = true
-				}
-				if existing.DeviceFlowEnabled != app.Spec.DeviceFlowEnabled {
-					patch.DeviceFlowEnabled = &app.Spec.DeviceFlowEnabled
-					needsPatch = true
-				}
-				if app.Spec.ClaimsMappingScript != nil && (existing.ClaimsMappingScript == nil || *existing.ClaimsMappingScript != *app.Spec.ClaimsMappingScript) {
-					patch.ClaimsMappingScript = app.Spec.ClaimsMappingScript
-					needsPatch = true
-				}
-				if !slices.Equal(existing.RedirectUris, app.Spec.RedirectUris) {
-					patch.RedirectUris = app.Spec.RedirectUris
-					needsPatch = true
-				}
-				if !slices.Equal(existing.PostLogoutRedirectUris, app.Spec.PostLogoutUris) {
-					patch.PostLogoutUris = app.Spec.PostLogoutUris
-					needsPatch = true
-				}
-				desiredATHT := ""
-				if app.Spec.AccessTokenHeaderType != nil {
-					desiredATHT = *app.Spec.AccessTokenHeaderType
-				}
-				if desiredATHT != "" && existing.AccessTokenHeaderType != desiredATHT {
-					patch.AccessTokenHeaderType = app.Spec.AccessTokenHeaderType
-					needsPatch = true
-				}
-				if needsPatch {
-					if patchErr := ac.Patch(ctx, id, patch); patchErr != nil {
+				patch := buildApplicationPatch(existing, app.Spec)
+				if patch != nil {
+					if patchErr := ac.Patch(ctx, id, *patch); patchErr != nil {
 						log.Error(patchErr, "failed to patch application")
 						return sp.setNotReady(ctx, "PatchFailed", patchErr.Error())
 					}
@@ -161,6 +132,7 @@ func (r *KeylineApplicationReconciler) Reconcile(ctx context.Context, req ctrl.R
 		PostLogoutUris:        app.Spec.PostLogoutUris,
 		AccessTokenHeaderType: app.Spec.AccessTokenHeaderType,
 		DeviceFlowEnabled:     app.Spec.DeviceFlowEnabled,
+		SigningAlgorithm:      app.Spec.SigningAlgorithm,
 	})
 	if createErr != nil {
 		log.Error(createErr, "failed to create application")
@@ -177,4 +149,55 @@ func (r *KeylineApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		For(&keylinev1alpha1.KeylineApplication{}).
 		Named("keylineapplication").
 		Complete(r)
+}
+
+func buildApplicationPatch(existing keylineapi.GetApplicationResponseDto, spec keylinev1alpha1.KeylineApplicationSpec) *keylineapi.PatchApplicationRequestDto {
+	patch := keylineapi.PatchApplicationRequestDto{}
+	needsPatch := false
+
+	if existing.DisplayName != spec.DisplayName {
+		patch.DisplayName = &spec.DisplayName
+		needsPatch = true
+	}
+	if existing.DeviceFlowEnabled != spec.DeviceFlowEnabled {
+		patch.DeviceFlowEnabled = &spec.DeviceFlowEnabled
+		needsPatch = true
+	}
+	if spec.ClaimsMappingScript != nil && (existing.ClaimsMappingScript == nil || *existing.ClaimsMappingScript != *spec.ClaimsMappingScript) {
+		patch.ClaimsMappingScript = spec.ClaimsMappingScript
+		needsPatch = true
+	}
+	if !slices.Equal(existing.RedirectUris, spec.RedirectUris) {
+		patch.RedirectUris = spec.RedirectUris
+		needsPatch = true
+	}
+	if !slices.Equal(existing.PostLogoutRedirectUris, spec.PostLogoutUris) {
+		patch.PostLogoutUris = spec.PostLogoutUris
+		needsPatch = true
+	}
+	desiredATHT := ""
+	if spec.AccessTokenHeaderType != nil {
+		desiredATHT = *spec.AccessTokenHeaderType
+	}
+	if desiredATHT != "" && existing.AccessTokenHeaderType != desiredATHT {
+		patch.AccessTokenHeaderType = spec.AccessTokenHeaderType
+		needsPatch = true
+	}
+	existingAlg := ""
+	if existing.SigningAlgorithm != nil {
+		existingAlg = *existing.SigningAlgorithm
+	}
+	desiredAlg := ""
+	if spec.SigningAlgorithm != nil {
+		desiredAlg = *spec.SigningAlgorithm
+	}
+	if desiredAlg != existingAlg {
+		patch.SigningAlgorithm = spec.SigningAlgorithm
+		needsPatch = true
+	}
+
+	if !needsPatch {
+		return nil
+	}
+	return &patch
 }

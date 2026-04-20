@@ -51,6 +51,11 @@ type KeylineApplicationSpec struct {
 	// ClaimsMappingScript is an optional custom claims mapping script.
 	// +optional
 	ClaimsMappingScript *string `json:"claimsMappingScript,omitempty"`
+
+	// SigningAlgorithm overrides the virtual server's signing algorithm for tokens issued to this application.
+	// +optional
+	// +kubebuilder:validation:Enum=RS256;EdDSA
+	SigningAlgorithm *string `json:"signingAlgorithm,omitempty"`
 }
 
 // KeylineApplicationStatus defines the observed state of KeylineApplication.
