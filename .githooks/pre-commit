@@ -19,5 +19,14 @@ else
   echo "  golangci-lint not found, skipping (run 'make lint' in CI)"
 fi
 
+echo "→ CRD generation"
+make manifests >/dev/null
+if ! git diff --quiet config/crd/bases charts/keyline-operator/crds; then
+  echo "CRDs out of date. 'make manifests' updated these files — please stage them:"
+  echo
+  git diff --stat config/crd/bases charts/keyline-operator/crds
+  exit 1
+fi
+
 echo "→ unit tests"
 make test
