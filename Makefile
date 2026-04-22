@@ -47,8 +47,14 @@ hooks: ## Install git hooks from .githooks/ into the local repo.
 	@echo "Git hooks installed from .githooks/"
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects. Also syncs the Helm chart CRDs.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(MAKE) chart-crds
+
+.PHONY: chart-crds
+chart-crds: ## Sync config/crd/bases/ into charts/keyline-operator/crds/ so the Helm chart matches the generated CRDs.
+	rm -f charts/keyline-operator/crds/*.yaml
+	cp config/crd/bases/*.yaml charts/keyline-operator/crds/
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.

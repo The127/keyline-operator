@@ -91,6 +91,13 @@ spec:
                   type: string
                 minItems: 1
                 type: array
+              signingAlgorithm:
+                description: SigningAlgorithm overrides the virtual server's signing
+                  algorithm for tokens issued to this application.
+                enum:
+                - RS256
+                - EdDSA
+                type: string
               type:
                 description: Type is the application type.
                 enum:
