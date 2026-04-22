@@ -68,51 +68,19 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return sp.setNotReady(ctx, "SecretNotFound", err.Error())
 	}
 
-	uc := kc.User()
+	return r.reconcileWithClient(ctx, kc.User(), &user, sp)
+}
 
-	if user.Status.UserId != "" {
-		id, parseErr := uuid.Parse(user.Status.UserId)
-		if parseErr == nil {
-			existing, getErr := uc.Get(ctx, id)
-			if getErr != nil && !isApiNotFound(getErr) {
-				log.Error(getErr, "failed to get user")
-				return sp.setNotReady(ctx, "GetFailed", getErr.Error())
-			}
-			if getErr == nil {
-				if err := r.syncDisplayName(ctx, uc, id, user.Spec.DisplayName, existing.DisplayName); err != nil {
-					log.Error(err, "failed to patch user")
-					return sp.setNotReady(ctx, "PatchFailed", err.Error())
-				}
-				return sp.setReady(ctx, "Synced", "User synced")
-			}
-			// 404 — fall through to find or create
-			user.Status.UserId = ""
-		}
-	}
+// reconcileWithClient runs the post-setup portion of Reconcile against a given
+// UserClient. Split out so unit tests can drive it with a fake client without
+// standing up Secrets, VS, or Instance objects.
+func (r *KeylineUserReconciler) reconcileWithClient(ctx context.Context, uc keylineclient.UserClient, user *keylinev1alpha1.KeylineUser, sp *statusPatcher) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
 
-	// find by username in case the status was lost
-	page, err := uc.List(ctx, keylineclient.ListUserParams{Page: 0, Size: 1000})
+	id, failure, err := r.ensureServiceUser(ctx, uc, user)
 	if err != nil {
-		log.Error(err, "failed to list users")
-		return sp.setNotReady(ctx, "ListFailed", err.Error())
+		return sp.setNotReady(ctx, failure.reason, err.Error())
 	}
-	for _, item := range page.Items {
-		if item.Username == user.Spec.Username && item.IsServiceUser {
-			user.Status.UserId = item.Id.String()
-			break
-		}
-	}
-
-	if user.Status.UserId == "" {
-		id, createErr := uc.CreateServiceUser(ctx, user.Spec.Username)
-		if createErr != nil {
-			log.Error(createErr, "failed to create service user")
-			return sp.setNotReady(ctx, "CreateFailed", createErr.Error())
-		}
-		user.Status.UserId = id.String()
-	}
-
-	id, _ := uuid.Parse(user.Status.UserId)
 
 	if user.Spec.DisplayName != nil {
 		if patchErr := uc.Patch(ctx, id, keylineapi.PatchUserRequestDto{
@@ -123,11 +91,54 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
-	if result, err := r.reconcileKeys(ctx, uc, &user, id); err != nil {
-		return sp.setNotReady(ctx, result.reason, err.Error())
+	if keyFailure, err := r.reconcileKeys(ctx, uc, user, id); err != nil {
+		return sp.setNotReady(ctx, keyFailure.reason, err.Error())
 	}
 
 	return sp.setReady(ctx, "Synced", "User synced")
+}
+
+// ensureServiceUser guarantees a Keyline service user exists matching
+// user.Spec and returns its id. Status.UserId is updated as a side effect.
+// It probes by stored UserId first, falls back to list-by-username on 404, and
+// creates the user if neither yields a match.
+func (r *KeylineUserReconciler) ensureServiceUser(ctx context.Context, uc keylineclient.UserClient, user *keylinev1alpha1.KeylineUser) (uuid.UUID, keyReconcileFailure, error) {
+	log := log.FromContext(ctx)
+
+	if user.Status.UserId != "" {
+		if id, parseErr := uuid.Parse(user.Status.UserId); parseErr == nil {
+			_, getErr := uc.Get(ctx, id)
+			if getErr == nil {
+				return id, keyReconcileFailure{}, nil
+			}
+			if !isApiNotFound(getErr) {
+				log.Error(getErr, "failed to get user")
+				return uuid.Nil, keyReconcileFailure{reason: "GetFailed"}, getErr
+			}
+			// 404: stored id is stale, clear and fall through to find-or-create.
+			user.Status.UserId = ""
+		}
+	}
+
+	page, err := uc.List(ctx, keylineclient.ListUserParams{Page: 0, Size: 1000})
+	if err != nil {
+		log.Error(err, "failed to list users")
+		return uuid.Nil, keyReconcileFailure{reason: "ListFailed"}, err
+	}
+	for _, item := range page.Items {
+		if item.Username == user.Spec.Username && item.IsServiceUser {
+			user.Status.UserId = item.Id.String()
+			return item.Id, keyReconcileFailure{}, nil
+		}
+	}
+
+	created, createErr := uc.CreateServiceUser(ctx, user.Spec.Username)
+	if createErr != nil {
+		log.Error(createErr, "failed to create service user")
+		return uuid.Nil, keyReconcileFailure{reason: "CreateFailed"}, createErr
+	}
+	user.Status.UserId = created.String()
+	return created, keyReconcileFailure{}, nil
 }
 
 type keyReconcileFailure struct {
@@ -180,17 +191,6 @@ func (r *KeylineUserReconciler) reconcileKeys(ctx context.Context, uc keylinecli
 	}
 	user.Status.ManagedKeyIds = kept
 	return keyReconcileFailure{}, nil
-}
-
-func (r *KeylineUserReconciler) syncDisplayName(ctx context.Context, uc keylineclient.UserClient, id uuid.UUID, desired *string, current string) error {
-	wantDisplay := ""
-	if desired != nil {
-		wantDisplay = *desired
-	}
-	if current == wantDisplay {
-		return nil
-	}
-	return uc.Patch(ctx, id, keylineapi.PatchUserRequestDto{DisplayName: &wantDisplay})
 }
 
 // SetupWithManager sets up the controller with the Manager.
