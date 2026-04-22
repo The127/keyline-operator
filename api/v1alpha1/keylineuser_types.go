@@ -22,6 +22,34 @@ type KeylineUserSpec struct {
 	// DisplayName is the human-readable label shown in the Keyline UI.
 	// +optional
 	DisplayName *string `json:"displayName,omitempty"`
+
+	// PublicKeys declares public keys to associate with this service user in
+	// Keyline. Keys are identified by a caller-supplied kid. The operator
+	// reconciles additively: it associates kids listed here, and removes only
+	// kids it previously added (tracked in status.managedKeyIds). Keys
+	// associated out-of-band in Keyline are left untouched. The operator never
+	// sees or stores private material.
+	// +optional
+	// +listType=map
+	// +listMapKey=kid
+	PublicKeys []ServiceUserPublicKey `json:"publicKeys,omitempty"`
+}
+
+// ServiceUserPublicKey is a single public key associated with a service user.
+type ServiceUserPublicKey struct {
+	// Kid uniquely identifies this key within the service user. Required so
+	// consumers (e.g. Keyline-Portal) can reference the kid in their own config
+	// without round-tripping via status.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	Kid string `json:"kid"`
+
+	// PublicKeyPEM is a PEM-encoded public key (Ed25519 / ECDSA / RSA as
+	// supported by Keyline).
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	PublicKeyPEM string `json:"publicKeyPEM"`
 }
 
 // KeylineUserStatus defines the observed state of KeylineUser.
@@ -29,6 +57,12 @@ type KeylineUserStatus struct {
 	// UserId is the UUID of the user in Keyline.
 	// +optional
 	UserId string `json:"userId,omitempty"`
+
+	// ManagedKeyIds lists kids the operator associated with this service user.
+	// Only kids in this list are candidates for removal when they disappear
+	// from spec.publicKeys.
+	// +optional
+	ManagedKeyIds []string `json:"managedKeyIds,omitempty"`
 
 	// conditions represent the current state of the KeylineUser resource.
 	// +listType=map

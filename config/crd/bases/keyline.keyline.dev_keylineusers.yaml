@@ -43,6 +43,40 @@ spec:
                 description: DisplayName is the human-readable label shown in the
                   Keyline UI.
                 type: string
+              publicKeys:
+                description: |-
+                  PublicKeys declares public keys to associate with this service user in
+                  Keyline. Keys are identified by a caller-supplied kid. The operator
+                  reconciles additively: it associates kids listed here, and removes only
+                  kids it previously added (tracked in status.managedKeyIds). Keys
+                  associated out-of-band in Keyline are left untouched. The operator never
+                  sees or stores private material.
+                items:
+                  description: ServiceUserPublicKey is a single public key associated
+                    with a service user.
+                  properties:
+                    kid:
+                      description: |-
+                        Kid uniquely identifies this key within the service user. Required so
+                        consumers (e.g. Keyline-Portal) can reference the kid in their own config
+                        without round-tripping via status.
+                      maxLength: 255
+                      minLength: 1
+                      type: string
+                    publicKeyPEM:
+                      description: |-
+                        PublicKeyPEM is a PEM-encoded public key (Ed25519 / ECDSA / RSA as
+                        supported by Keyline).
+                      minLength: 1
+                      type: string
+                  required:
+                  - kid
+                  - publicKeyPEM
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - kid
+                x-kubernetes-list-type: map
               username:
                 description: Username is the unique service-user identifier in Keyline.
                 maxLength: 255
@@ -131,6 +165,14 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              managedKeyIds:
+                description: |-
+                  ManagedKeyIds lists kids the operator associated with this service user.
+                  Only kids in this list are candidates for removal when they disappear
+                  from spec.publicKeys.
+                items:
+                  type: string
+                type: array
               userId:
                 description: UserId is the UUID of the user in Keyline.
                 type: string

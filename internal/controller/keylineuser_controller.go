@@ -112,8 +112,9 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		user.Status.UserId = id.String()
 	}
 
+	id, _ := uuid.Parse(user.Status.UserId)
+
 	if user.Spec.DisplayName != nil {
-		id, _ := uuid.Parse(user.Status.UserId)
 		if patchErr := uc.Patch(ctx, id, keylineapi.PatchUserRequestDto{
 			DisplayName: user.Spec.DisplayName,
 		}); patchErr != nil {
@@ -122,7 +123,63 @@ func (r *KeylineUserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
+	if result, err := r.reconcileKeys(ctx, uc, &user, id); err != nil {
+		return sp.setNotReady(ctx, result.reason, err.Error())
+	}
+
 	return sp.setReady(ctx, "Synced", "User synced")
+}
+
+type keyReconcileFailure struct {
+	reason string
+}
+
+// reconcileKeys drives the additive public-key sync against Keyline. It
+// associates kids present in spec but absent from status.managedKeyIds, removes
+// kids that disappeared from spec, and leaves any out-of-band keys in Keyline
+// untouched. Status.ManagedKeyIds is mutated in place so partial progress is
+// persisted by the caller's status patch even on mid-loop failure.
+func (r *KeylineUserReconciler) reconcileKeys(ctx context.Context, uc keylineclient.UserClient, user *keylinev1alpha1.KeylineUser, id uuid.UUID) (keyReconcileFailure, error) {
+	log := log.FromContext(ctx)
+
+	desired := make(map[string]keylinev1alpha1.ServiceUserPublicKey, len(user.Spec.PublicKeys))
+	for _, k := range user.Spec.PublicKeys {
+		desired[k.Kid] = k
+	}
+	managed := make(map[string]struct{}, len(user.Status.ManagedKeyIds))
+	for _, kid := range user.Status.ManagedKeyIds {
+		managed[kid] = struct{}{}
+	}
+
+	for kid, k := range desired {
+		if _, ok := managed[kid]; ok {
+			continue
+		}
+		kidCopy := kid
+		if _, err := uc.AssociateServiceUserPublicKey(ctx, id, keylineapi.AssociateServiceUserPublicKeyRequestDto{
+			PublicKey: k.PublicKeyPEM,
+			Kid:       &kidCopy,
+		}); err != nil {
+			log.Error(err, "failed to associate public key", "kid", kid)
+			return keyReconcileFailure{reason: "AssociateKeyFailed"}, err
+		}
+		user.Status.ManagedKeyIds = append(user.Status.ManagedKeyIds, kid)
+		managed[kid] = struct{}{}
+	}
+
+	kept := make([]string, 0, len(user.Status.ManagedKeyIds))
+	for _, kid := range user.Status.ManagedKeyIds {
+		if _, ok := desired[kid]; ok {
+			kept = append(kept, kid)
+			continue
+		}
+		if err := uc.RemoveServiceUserPublicKey(ctx, id, kid); err != nil && !isApiNotFound(err) {
+			log.Error(err, "failed to remove public key", "kid", kid)
+			return keyReconcileFailure{reason: "RemoveKeyFailed"}, err
+		}
+	}
+	user.Status.ManagedKeyIds = kept
+	return keyReconcileFailure{}, nil
 }
 
 func (r *KeylineUserReconciler) syncDisplayName(ctx context.Context, uc keylineclient.UserClient, id uuid.UUID, desired *string, current string) error {
