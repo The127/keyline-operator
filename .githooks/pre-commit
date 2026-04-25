@@ -28,5 +28,20 @@ if ! git diff --quiet config/crd/bases charts/keyline-operator/crds; then
   exit 1
 fi
 
+echo "→ chart version bump"
+# If any chart file changed (other than Chart.yaml itself), Chart.yaml's
+# version: line must also be staged. Without a version bump, source-controller
+# keeps serving the previously-cached artifact and the change never reaches
+# any cluster.
+chart_changes=$(git diff --cached --name-only -- 'charts/' | grep -v '^charts/keyline-operator/Chart.yaml$' || true)
+if [ -n "$chart_changes" ] && ! git diff --cached -- charts/keyline-operator/Chart.yaml | grep -q '^[+-]version:'; then
+  echo "Chart contents changed but charts/keyline-operator/Chart.yaml 'version:' was not bumped:"
+  echo
+  echo "$chart_changes" | sed 's/^/  /'
+  echo
+  echo "Bump the version (e.g. 0.1.1 → 0.1.2) so source-controller re-packages the artifact."
+  exit 1
+fi
+
 echo "→ unit tests"
 make test
