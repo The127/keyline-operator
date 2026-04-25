@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -136,6 +137,28 @@ var _ = Describe("KeylineInstance Controller", func() {
 				Name:      resourceName + keysPVC,
 				Namespace: "default",
 			}, pvc)).To(Succeed())
+		})
+
+		// Keyline instances are single-replica and mount an RWO PVC for the
+		// keystore. RollingUpdate deadlocks on Multi-Attach during upgrades —
+		// the new pod can't bind the volume until the old one releases it,
+		// and the old one won't terminate until the new one is Ready. Recreate
+		// trades a few seconds of downtime for a rollout that actually
+		// completes.
+		It("should set the Deployment strategy to Recreate", func() {
+			By("Reconciling the resource so the Deployment is created")
+			controllerReconciler := &KeylineInstanceReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			deployment := &appsv1.Deployment{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, deployment)).To(Succeed())
+			Expect(deployment.Spec.Strategy.Type).To(Equal(appsv1.RecreateDeploymentStrategyType))
 		})
 	})
 })

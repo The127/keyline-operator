@@ -319,6 +319,12 @@ func (r *KeylineInstanceReconciler) ensureDeployment(ctx context.Context, instan
 
 		desired.Spec = appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
+			// Recreate so the keystore PVC (RWO) detaches before the new pod
+			// schedules. RollingUpdate deadlocks on Multi-Attach because the
+			// new pod can't mount until the old pod releases the volume, and
+			// the old pod won't be torn down until the new one is Ready.
+			// Single-replica deployments don't gain anything from RollingUpdate.
+			Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
